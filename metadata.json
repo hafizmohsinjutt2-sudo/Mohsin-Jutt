@@ -1,0 +1,6 @@
+{
+  "name": "AgroSmart AI",
+  "description": "An advanced AI-powered smart farming ecosystem for crop management, disease detection, and yield optimization.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

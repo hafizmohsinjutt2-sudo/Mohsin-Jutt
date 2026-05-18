@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Farmer or expert profile including preferences and land details.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["farmer", "agronomist", "admin"] },
+        "language": { "type": "string" },
+        "phone": { "type": "string" },
+        "location": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role"]
+    },
+    "Farm": {
+      "title": "Farm",
+      "description": "Details about a specific farm plot.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "size": { "type": "number" },
+        "location": { "type": "object" },
+        "soilType": { "type": "string" },
+        "irrigationType": { "type": "string" }
+      },
+      "required": ["ownerId", "name"]
+    },
+    "Crop": {
+      "title": "Crop",
+      "description": "Active crop monitoring entry.",
+      "type": "object",
+      "properties": {
+        "farmId": { "type": "string" },
+        "type": { "type": "string" },
+        "variety": { "type": "string" },
+        "sowingDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" },
+        "expectedHarvest": { "type": "string", "format": "date-time" }
+      },
+      "required": ["farmId", "type"]
+    },
+    "AIScan": {
+      "title": "AI Disease Scan",
+      "description": "Records of AI-powered disease detections.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "cropId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "result": { "type": "object" },
+        "confidence": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "result"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Primary user profiles."
+    },
+    "/farms/{farmId}": {
+      "schema": "Farm",
+      "description": "Farm plot details."
+    },
+    "/crops/{cropId}": {
+      "schema": "Crop",
+      "description": "Active crop management."
+    },
+    "/scans/{scanId}": {
+      "schema": "AIScan",
+      "description": "AI scan history."
+    }
+  }
+}
