@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Leaf, 
   CloudSun, 
@@ -22,30 +22,116 @@ import {
   Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { auth, loginWithGoogle } from './lib/firebase';
+import { auth, loginWithGoogle, loginAnonymously } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
 // --- Types ---
 type View = 'dashboard' | 'scanner' | 'weather' | 'market' | 'chat' | 'calendar' | 'schemes' | 'admin';
+type Language = 'en' | 'ur';
+
+const translations = {
+  en: {
+    overview: "Overview",
+    diseaseScan: "Disease Scan",
+    forecast: "Forecast",
+    marketPrices: "Market Prices",
+    aiAdvisor: "AI Advisor",
+    agriCalendar: "Agri-Calendar",
+    govtSchemes: "Govt Schemes",
+    adminPanel: "Admin Panel",
+    greeting: "Good morning",
+    satelliteStatus: "Satellite Status",
+    activeUser: "Active User",
+    signOut: "Sign Out",
+    notifTitle: "Notifications",
+    satelliteActive: "NDVI Scan Active",
+    punjabFarm: "Punjab Central Farm • Block 4B",
+    scanTitle: "Plant Symptom Analysis",
+    weatherTitle: "Weather & Sowing Advice",
+    marketTitle: "Market Price Insights",
+    chatTitle: "AI Expert Consult",
+    weatherForecast: "Weather Forecast",
+    cropVitality: "Crop Vitality (NDVI)",
+    marketPulse: "Market Pulse",
+    expertAdvice: "AgroSmart Expert Advice",
+    talkToAi: "Talk to AI",
+    scanPhoto: "Scan Photo",
+    smartIrrigation: "Smart Irrigation",
+    soilMoisture: "Soil Moisture",
+    activateDrip: "Activate Drip Pulse",
+    quickOps: "Quick Operations",
+    pestWarning: "Alert: Pest Warning",
+    locustAlert: "Local Locust swarm predicted 30km North. Recommend preventive sprays.",
+    details: "Details",
+    live: "LIVE",
+    robust: "Robust",
+    anomalies: "Anomalies",
+    plots: "Plots",
+    optimizeFertilizer: "Optimize Fertilizer",
+    pestPrediction: "Pest Prediction",
+    dataExport: "Data Export",
+  },
+  ur: {
+    overview: "جائزہ",
+    diseaseScan: "بیماریوں کی جانچ",
+    forecast: "موسم کی پیش گوئی",
+    marketPrices: "مارکیٹ کی قیمتیں",
+    aiAdvisor: "اے آئی مشیر",
+    agriCalendar: "زرعی کیلنڈر",
+    govtSchemes: "سرکاری سکیمیں",
+    adminPanel: "ایڈمن پینل",
+    greeting: "صبح بخیر",
+    satelliteStatus: "سیٹلائٹ کی صورتحال",
+    activeUser: "فعال صارف",
+    signOut: "لاگ آؤٹ",
+    notifTitle: "اطلاعات",
+    satelliteActive: "این ڈی وی آئی اسکین فعال",
+    punjabFarm: "پنجاب سینٹرل فارم • بلاک 4B",
+    scanTitle: "پودوں کی علامات کا تجزیہ",
+    weatherTitle: "موسم اور بوائی کا مشورہ",
+    marketTitle: "مارکیٹ کی قیمتوں کی معلومات",
+    chatTitle: "اے آئی ماہر سے مشورہ",
+    weatherForecast: "موسم کی پیش گوئی",
+    cropVitality: "فصل کی حیات (این ڈی وی آئی)",
+    marketPulse: "مارکیٹ پلس",
+    expertAdvice: "ایگرو اسمارٹ ماہر کا مشورہ",
+    talkToAi: "اے آئی سے بات کریں",
+    scanPhoto: "فوٹو اسکین کریں",
+    smartIrrigation: "سمارٹ آبپاشی",
+    soilMoisture: "مٹی کی نمی",
+    activateDrip: "ڈرپ پلس کو چالو کریں",
+    quickOps: "فوری آپریشنز",
+    pestWarning: "انتباہ: کیڑوں کی وارننگ",
+    locustAlert: "مقامی ٹڈی دل کے جھنڈ کی 30 کلومیٹر شمال میں پیش گوئی کی گئی ہے۔ حفاظتی سپرے کی سفارش کی جاتی ہے۔",
+    details: "تفصیلات",
+    live: "براہ راست",
+    robust: "مضبوط",
+    anomalies: "بے ضابطگییاں",
+    plots: "پلاٹ",
+    optimizeFertilizer: "کھاد کو بہتر بنائیں",
+    pestPrediction: "کیڑوں کی پیش گوئی",
+    dataExport: "ڈیٹا ایکسپورٹ",
+  }
+};
 
 // --- Components ---
-const Sidebar = ({ currentView, setView, isMobileOpen, setIsMobileOpen }: { 
+const Sidebar = ({ currentView, setView, isMobileOpen, setIsMobileOpen, language }: { 
   currentView: View, 
   setView: (v: View) => void,
   isMobileOpen: boolean,
-  setIsMobileOpen: (o: boolean) => void
+  setIsMobileOpen: (o: boolean) => void,
+  language: Language
 }) => {
+  const t = translations[language];
   const menuItems = [
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { id: 'scanner', icon: Camera, label: 'Disease Scan' },
-    { id: 'weather', icon: CloudSun, label: 'Forecast' },
-    { id: 'market', icon: TrendingUp, label: 'Market Prices' },
-    { id: 'chat', icon: MessageSquare, label: 'AI Advisor' },
-    { id: 'calendar', icon: Calendar, label: 'Agri-Calendar' },
-    { id: 'schemes', icon: Info, label: 'Govt Schemes' },
+    { id: 'dashboard', icon: LayoutDashboard, label: t.overview },
+    { id: 'scanner', icon: Camera, label: t.diseaseScan },
+    { id: 'weather', icon: CloudSun, label: t.forecast },
+    { id: 'market', icon: TrendingUp, label: t.marketPrices },
+    { id: 'chat', icon: MessageSquare, label: t.aiAdvisor },
+    { id: 'calendar', icon: Calendar, label: t.agriCalendar },
+    { id: 'schemes', icon: Info, label: t.govtSchemes },
   ];
-
-  const adminItem = { id: 'admin', icon: Settings, label: 'Admin Panel' };
 
   return (
     <aside className={`
@@ -93,17 +179,17 @@ const Sidebar = ({ currentView, setView, isMobileOpen, setIsMobileOpen }: {
                 `}
               >
                 <Settings className={`w-5 h-5 ${currentView === 'admin' ? 'text-white' : ''}`} />
-                Admin Panel
+                {t.adminPanel}
                 {currentView === 'admin' && <ChevronRight className="ml-auto w-4 h-4" />}
               </button>
           </div>
         </nav>
 
         <div className="mt-6 p-4 bg-natural-500/30 rounded-xl border border-white/5">
-          <p className="text-[10px] text-natural-300 uppercase font-black mb-2 tracking-wider">Satellite Status</p>
+          <p className="text-[10px] text-natural-300 uppercase font-black mb-2 tracking-wider">{t.satelliteStatus}</p>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            <p className="text-xs text-natural-50">NDVI Scan Active</p>
+            <p className="text-xs text-natural-50">{t.satelliteActive}</p>
           </div>
         </div>
       </div>
@@ -118,13 +204,16 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [language, setLanguage] = useState<Language>('en');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const t = translations[language];
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        // Simple check for admin - in a real app check custom claims or a profile doc
-        // For this demo, let's allow the primary user to see admin panel
         setIsAdmin(true); 
       } else {
         setIsAdmin(false);
@@ -148,16 +237,17 @@ export default function App() {
   if (!user) return <LandingPage />;
 
   return (
-    <div className="min-h-screen bg-natural-50">
+    <div className="min-h-screen bg-natural-50" dir={language === 'ur' ? 'rtl' : 'ltr'}>
       <Sidebar 
         currentView={view} 
         setView={setView} 
         isMobileOpen={isSidebarOpen} 
         setIsMobileOpen={setIsSidebarOpen} 
+        language={language}
       />
 
       {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen">
+      <main className={`min-h-screen ${language === 'en' ? 'lg:ml-64' : 'lg:mr-64'}`}>
         {/* Header */}
         <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md border-b border-natural-200">
           <button 
@@ -168,30 +258,91 @@ export default function App() {
           </button>
 
           <div className="hidden sm:block">
-            <p className="text-xs text-natural-400 font-medium lowercase italic">Good morning, {user.displayName?.split(' ')[0]}</p>
+            <p className="text-xs text-natural-400 font-medium lowercase italic">{t.greeting}, {user.displayName?.split(' ')[0]}</p>
             <h1 className="text-lg font-bold text-natural-600">
-              {view === 'dashboard' && 'Punjab Central Farm • Block 4B'}
-              {view === 'scanner' && 'Plant Symptom Analysis'}
-              {view === 'weather' && 'Weather & Sowing Advice'}
-              {view === 'market' && 'Market Price Insights'}
-              {view === 'chat' && 'AI Expert Consult'}
+              {view === 'dashboard' && t.punjabFarm}
+              {view === 'scanner' && t.scanTitle}
+              {view === 'weather' && t.weatherTitle}
+              {view === 'market' && t.marketTitle}
+              {view === 'chat' && t.chatTitle}
             </h1>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="bg-natural-100 rounded-full px-4 py-1.5 flex items-center gap-2 border border-natural-200 hidden md:flex cursor-pointer hover:bg-natural-200 transition-all">
+            <button 
+              onClick={() => setLanguage(l => l === 'en' ? 'ur' : 'en')}
+              className="bg-natural-100 rounded-full px-4 py-1.5 flex items-center gap-2 border border-natural-200 hidden md:flex cursor-pointer hover:bg-natural-200 transition-all"
+            >
               <span className="text-xs font-bold text-natural-500 uppercase tracking-tight">Urdu / EN</span>
-            </div>
-            <button className="p-2 text-natural-400 hover:text-natural-600 transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
             </button>
-            <div className="flex items-center gap-2 pl-4 border-l border-natural-100">
-              <img 
-                src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
-                alt="Profile" 
-                className="w-10 h-10 rounded-full border-2 border-natural-300 shadow-sm"
-              />
+            
+            <div className="relative">
+              <button 
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="p-2 text-natural-400 hover:text-natural-600 transition-colors relative"
+              >
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+              </button>
+              
+              <AnimatePresence>
+                {notificationsOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className={`absolute top-12 ${language === 'en' ? 'right-0' : 'left-0'} w-64 bg-white border border-natural-200 rounded-2xl shadow-xl p-4 z-50`}
+                  >
+                    <h4 className="text-xs font-black uppercase tracking-widest text-natural-600 mb-4">{t.notifTitle}</h4>
+                    <div className="space-y-4">
+                       <div className="flex gap-3 text-xs">
+                          <div className="w-2 h-2 rounded-full bg-red-500 mt-1 shrink-0"></div>
+                          <p className="text-natural-600 leading-relaxed font-medium">Local Locust swarm predicted 30km North. Prevent!</p>
+                       </div>
+                       <div className="flex gap-3 text-xs">
+                          <div className="w-2 h-2 rounded-full bg-blue-500 mt-1 shrink-0"></div>
+                          <p className="text-natural-600 leading-relaxed font-medium">New subsidy scheme for Solar Pumps live.</p>
+                       </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="relative">
+               <button 
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="flex items-center gap-2 pl-4 border-l border-natural-100"
+               >
+                <img 
+                  src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
+                  alt="Profile" 
+                  className="w-10 h-10 rounded-full border-2 border-natural-300 shadow-sm"
+                />
+              </button>
+
+              <AnimatePresence>
+                {profileOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className={`absolute top-12 ${language === 'en' ? 'right-0' : 'left-0'} w-48 bg-white border border-natural-200 rounded-2xl shadow-xl p-4 z-50`}
+                  >
+                    <div className="text-center mb-4 pb-4 border-b border-natural-100">
+                       <p className="text-sm font-bold text-natural-700">{user.displayName || 'Farmer'}</p>
+                       <p className="text-[10px] text-natural-400 font-medium italic">{user.email}</p>
+                    </div>
+                    <button 
+                      onClick={() => signOut(auth)}
+                      className="w-full flex items-center justify-center gap-2 py-2 text-xs font-black uppercase text-red-500 hover:bg-red-50 rounded-lg transition-all tracking-widest"
+                    >
+                      <LogOut size={14} />
+                      {t.signOut}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
@@ -206,14 +357,14 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {view === 'dashboard' && <Dashboard user={user} setView={setView} />}
-              {view === 'scanner' && <DiseaseScanner />}
-              {view === 'chat' && <AIChatView user={user} />}
-              {view === 'market' && <MarketPriceView />}
-              {view === 'weather' && <WeatherView />}
-              {view === 'calendar' && <CalendarView />}
-              {view === 'schemes' && <SchemesView />}
-              {view === 'admin' && <AdminView user={user} />}
+              {view === 'dashboard' && <Dashboard user={user} setView={setView} language={language} />}
+              {view === 'scanner' && <DiseaseScanner language={language} />}
+              {view === 'chat' && <AIChatView user={user} language={language} />}
+              {view === 'market' && <MarketPriceView language={language} />}
+              {view === 'weather' && <WeatherView language={language} />}
+              {view === 'calendar' && <CalendarView language={language} />}
+              {view === 'schemes' && <SchemesView language={language} />}
+              {view === 'admin' && <AdminView user={user} language={language} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -227,6 +378,44 @@ export default function App() {
 function LandingPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [language, setLanguage] = useState<Language>('en');
+
+  const t = {
+    en: {
+      hero: "Revolutionize Your Farm with AI.",
+      desc: "Empower your crops with real-time AI disease detection, hyperlocal weather forecasts, and predictive market analytics.",
+      google: "Continue with Google",
+      demo: "Explore Demo",
+      accuracy: "Diagnosis Accuracy",
+      yield: "Yield Increase",
+      ndvi: "NDVI Vegetation Scan",
+      live: "LIVE MAP",
+      footer: "© 2026 AgroSmart AI Ecosystem • Empowering Soil & Soul",
+      privacy: "Privacy",
+      terms: "Terms",
+      help: "Help",
+      lang: "اردو",
+      authenticating: "Authenticating...",
+      loadingDemo: "Loading Demo..."
+    },
+    ur: {
+      hero: "اے آئی کے ساتھ اپنے فارم میں انقلاب لائیں۔",
+      desc: "ریئل ٹائم اے آئی بیماریوں کا پتہ لگانے، ہائپر لوکل موسم کی پیش گوئی، اور مارکیٹ کے تجزیات کے ساتھ اپنی فصلوں کو بااختیار بنائیں۔",
+      google: "گوگل کے ساتھ جاری رکھیں",
+      demo: "ڈیمو دیکھیں",
+      accuracy: "تشخیص کی درستگی",
+      yield: "پیداوار میں اضافہ",
+      ndvi: "این ڈی وی آئی اسکین",
+      live: "براہ راست نقشہ",
+      footer: "© 2026 ایگرو اسمارٹ اے آئی ایکو سسٹم • مٹی اور روح کو بااختیار بنانا",
+      privacy: "رازداری",
+      terms: "شرائط",
+      help: "مدد",
+      lang: "English",
+      authenticating: "تصدیق کی جا رہی ہے...",
+      loadingDemo: "ڈیمو لوڈ ہو رہا ہے..."
+    }
+  }[language];
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -234,15 +423,38 @@ function LandingPage() {
     try {
       await loginWithGoogle();
     } catch (err: any) {
-      console.error("Login Error:", err);
-      setError(err.message || "Failed to sign in. Please try again.");
+      setError(err.message || "Failed to login. Please try again.");
+      console.error(err);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await loginAnonymously();
+    } catch (err: any) {
+      console.warn("Firebase Anonymous Auth failed, falling back to Mock Demo Mode:", err.message);
+      // Fallback to local mock state if anonymous auth is disabled in Firebase console
+      const mockUser = {
+        uid: 'demo-user-123',
+        displayName: 'Demo Farmer',
+        email: 'demo@agrosmart.ai',
+        photoURL: 'https://ui-avatars.com/api/?name=Demo+Farmer&background=random',
+        isAnonymous: true
+      } as FirebaseUser;
+      
+      setUser(mockUser);
+      setIsAdmin(true);
     } finally {
       setIsLoggingIn(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-natural-50 text-natural-700 overflow-hidden relative font-sans">
+    <div className="min-h-screen bg-natural-50 text-natural-700 overflow-hidden relative font-sans" dir={language === 'ur' ? 'rtl' : 'ltr'}>
       <div className="absolute top-0 right-0 w-1/2 h-full bg-natural-300/10 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2"></div>
       <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-natural-500/10 blur-[100px] rounded-full translate-y-1/2 -translate-x-1/4"></div>
 
@@ -254,6 +466,12 @@ function LandingPage() {
             </div>
             <span className="text-2xl font-heading font-black text-natural-600 tracking-tight italic uppercase">AgroSmart AI</span>
           </div>
+          <button 
+            onClick={() => setLanguage(l => l === 'en' ? 'ur' : 'en')}
+            className="px-6 py-2 bg-white border border-natural-200 rounded-full text-xs font-black uppercase tracking-widest text-natural-600 hover:bg-natural-100 transition-all cursor-pointer shadow-sm active:scale-95"
+          >
+            {t.lang}
+          </button>
         </header>
 
         <main className="grid lg:grid-cols-2 gap-12 items-center flex-1">
@@ -264,13 +482,17 @@ function LandingPage() {
               transition={{ duration: 0.6 }}
             >
               <span className="inline-block px-4 py-1.5 bg-natural-600 text-natural-50 text-xs font-black uppercase tracking-widest rounded-full mb-6 italic">
-                Sustainable Tech for Soil & Soul
+                {language === 'en' ? 'Sustainable Tech for Soil & Soul' : 'مٹی اور روح کے لیے پائیدار ٹیکنالوجی'}
               </span>
               <h1 className="text-5xl lg:text-7xl font-bold text-natural-600 leading-tight mb-6 font-heading">
-                Revolutionize Your <span className="text-natural-400">Farm</span> with AI.
+                {language === 'en' ? (
+                  <>Revolutionize Your <span className="text-natural-400">Farm</span> with AI.</>
+                ) : (
+                  <>اے آئی کے ساتھ اپنے <span className="text-natural-400">فارم</span> میں انقلاب لائیں۔</>
+                )}
               </h1>
               <p className="text-natural-500 text-lg mb-10 max-w-lg mx-auto lg:mx-0 leading-relaxed font-medium italic opacity-80">
-                Empower your crops with real-time AI disease detection, hyperlocal weather forecasts, and predictive market analytics.
+                {t.desc}
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
@@ -292,11 +514,27 @@ function LandingPage() {
                   ) : (
                     <img src="https://www.google.com/favicon.ico" className="w-5 h-5 bg-white rounded-full p-0.5" alt=""/>
                   )}
-                  {isLoggingIn ? 'Authenticating...' : 'Continue with Google'}
+                  {isLoggingIn ? t.authenticating : t.google}
                 </button>
-                <button className="px-8 py-4 bg-white text-natural-600 rounded-2xl font-bold hover:bg-natural-100 transition-all flex items-center justify-center gap-3 border border-natural-200">
-                  <Activity className="w-5 h-5 text-natural-300" />
-                  Explore Demo
+                <button 
+                  onClick={handleDemoLogin}
+                  disabled={isLoggingIn}
+                  className={`
+                    px-8 py-4 bg-white text-natural-600 rounded-2xl font-bold hover:bg-natural-100 transition-all flex items-center justify-center gap-3 border border-natural-200 shadow-sm
+                    ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}
+                  `}
+                >
+                  {isLoggingIn ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                    >
+                      <Activity className="w-5 h-5 text-natural-300" />
+                    </motion.div>
+                  ) : (
+                    <Activity className="w-5 h-5 text-natural-300" />
+                  )}
+                  {isLoggingIn ? t.loadingDemo : t.demo}
                 </button>
               </div>
 
@@ -308,7 +546,7 @@ function LandingPage() {
             </motion.div>
           </div>
 
-          <div className="hidden lg:block relative">
+          <div className={`hidden lg:block relative ${language === 'ur' ? 'lg:-translate-x-12' : 'lg:translate-x-12'}`}>
              <motion.div
                animate={{ y: [0, -20, 0] }}
                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
@@ -318,18 +556,18 @@ function LandingPage() {
                   <div className="bg-natural-600 p-6 rounded-3xl border border-white/10 text-white shadow-lg shadow-natural-600/20">
                     <Activity className="text-natural-300 mb-3" />
                     <p className="text-2xl font-bold">98.4%</p>
-                    <p className="text-xs text-natural-50/70 opacity-70">Diagnosis Accuracy</p>
+                    <p className="text-xs text-natural-50/70 opacity-70">{t.accuracy}</p>
                   </div>
                   <div className="bg-white p-6 rounded-3xl border border-natural-100 shadow-sm text-natural-600">
                     <Droplets className="text-natural-300 mb-3" />
                     <p className="text-2xl font-bold">+15%</p>
-                    <p className="text-xs text-natural-400">Yield Increase</p>
+                    <p className="text-xs text-natural-400">{t.yield}</p>
                   </div>
                   <div className="col-span-2 bg-natural-100 p-6 rounded-3xl border border-natural-200 relative overflow-hidden">
                     <div className="flex justify-between items-center mb-4 relative z-10">
-                       <p className="text-natural-600 font-bold uppercase text-xs tracking-wider">NDVI Vegetation Scan</p>
+                       <p className="text-natural-600 font-bold uppercase text-xs tracking-wider">{t.ndvi}</p>
                        <span className="text-emerald-600 text-[10px] flex items-center gap-1 font-black italic">
-                         <Activity size={12} /> LIVE MAP
+                         <Activity size={12} /> {t.live}
                        </span>
                     </div>
                     <div className="h-24 flex items-end gap-2 relative z-10">
@@ -349,11 +587,11 @@ function LandingPage() {
         </main>
 
         <footer className="py-8 border-t border-natural-200 mt-12 flex flex-col sm:flex-row gap-6 items-center justify-between text-natural-400 text-[10px] font-black uppercase tracking-widest italic">
-          <p>© 2026 AgroSmart AI Ecosystem • Empowering Soil & Soul</p>
+          <p>{t.footer}</p>
           <div className="flex gap-8">
-            <a href="#" className="hover:text-natural-600 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-natural-600 transition-colors">Terms</a>
-            <a href="#" className="hover:text-natural-600 transition-colors">Help</a>
+            <a href="#" className="hover:text-natural-600 transition-colors">{t.privacy}</a>
+            <a href="#" className="hover:text-natural-600 transition-colors">{t.terms}</a>
+            <a href="#" className="hover:text-natural-600 transition-colors">{t.help}</a>
           </div>
         </footer>
       </div>
@@ -361,9 +599,11 @@ function LandingPage() {
   );
 }
 
-function Dashboard({ user, setView }: { user: any, setView: (v: View) => void }) {
+function Dashboard({ user, setView, language }: { user: any, setView: (v: View) => void, language: Language }) {
   const [landscapeData, setLandscapeData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const t = translations[language];
 
   useEffect(() => {
     fetch('/api/landscape-updates')
@@ -379,10 +619,10 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
   }, []);
 
   const stats = [
-    { label: 'Crop Health', value: 'Monitoring...', icon: Activity, detail: 'AI Active', color: 'text-natural-600' },
-    { label: 'Soil Moisture', value: 'Awaiting Scan', icon: Droplets, detail: 'Sensor Link', color: 'text-blue-600' },
-    { label: 'Risk Alert', value: 'Zero Risk', icon: Zap, detail: 'Clean Scan', color: 'text-amber-600' },
-    { label: 'Yield Est.', value: 'Calculating...', icon: TrendingUp, detail: 'Data Link', color: 'text-natural-600' },
+    { label: language === 'en' ? 'Crop Health' : 'فصل کی صحت', value: 'Monitoring...', icon: Activity, detail: 'AI Active', color: 'text-natural-600' },
+    { label: language === 'en' ? 'Soil Moisture' : 'مٹی کی نمی', value: 'Awaiting Scan', icon: Droplets, detail: 'Sensor Link', color: 'text-blue-600' },
+    { label: language === 'en' ? 'Risk Alert' : 'خطرے کا انتباہ', value: 'Zero Risk', icon: Zap, detail: 'Clean Scan', color: 'text-amber-600' },
+    { label: language === 'en' ? 'Yield Est.' : 'پیداوار کا تخمینہ', value: 'Calculating...', icon: TrendingUp, detail: 'Data Link', color: 'text-natural-600' },
   ];
 
   return (
@@ -413,21 +653,21 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
              {/* Localized Weather */}
              <div className="md:col-span-5 bg-white p-6 rounded-2xl border border-natural-200 shadow-sm relative overflow-hidden">
                 <div className="flex justify-between items-start mb-6">
-                  <h3 className="font-bold text-natural-600">Weather Forecast</h3>
-                  <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded italic">LIVE</span>
+                  <h3 className="font-bold text-natural-600">{t.weatherForecast}</h3>
+                  <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded italic">{t.live}</span>
                 </div>
                 {landscapeData?.weather ? (
                   <div className="space-y-6">
                     <div className="flex items-center gap-4">
-                      <div className="text-5xl font-light text-natural-600">{landscapeData.weather.temp}°°</div>
+                      <div className="text-5xl font-light text-natural-600">{landscapeData.weather.temp}°</div>
                       <div className="text-xs text-natural-400 font-medium">
                         <p className="font-black uppercase text-natural-600">{landscapeData.weather.condition}</p>
-                        <p>Precipitation: 12%</p>
+                        <p>{language === 'en' ? 'Precipitation' : 'بارش'}: 12%</p>
                       </div>
                     </div>
                     <div className="flex justify-between border-t border-natural-100 pt-4">
                        {[
-                         { d: 'Mon', t: '31' }, { d: 'Tue', t: '29' }, { d: 'Wed', t: '33' }, { d: 'Thu', t: '38', hot: true }
+                         { d: language === 'en' ? 'Mon' : 'پیر', t: '31' }, { d: language === 'en' ? 'Tue' : 'منگل', t: '29' }, { d: language === 'en' ? 'Wed' : 'بدھ', t: '33' }, { d: language === 'en' ? 'Thu' : 'جمعرات', t: '38', hot: true }
                        ].map((item, i) => (
                          <div key={i} className="text-center">
                             <p className="text-[10px] text-natural-400 font-bold uppercase">{item.d}</p>
@@ -437,7 +677,7 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
                     </div>
                     <div className="bg-natural-50 rounded-xl p-3 border border-dashed border-natural-300">
                       <p className="text-[10px] italic text-natural-500 leading-relaxed">
-                        <span className="font-black uppercase not-italic mr-1">AI Advice:</span> High evaporation expected on Thursday. Increase irrigation duration.
+                        <span className="font-black uppercase not-italic mr-1">{language === 'en' ? 'AI Advice' : 'اے آئی مشورہ'}:</span> {language === 'en' ? 'High evaporation expected on Thursday. Increase irrigation duration.' : 'جمعرات کو زیادہ بخارات کی توقع ہے۔ آبپاشی کا دورانیہ بڑھائیں۔'}
                       </p>
                     </div>
                   </div>
@@ -450,19 +690,27 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
              </div>
 
              {/* NDVI Analysis */}
-             <div className="md:col-span-7 bg-white p-6 rounded-2xl border border-natural-200 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="font-bold text-natural-600">Crop Vitality (NDVI)</h3>
-                  <button onClick={() => setView('scanner')} className="text-xs font-black text-natural-500 hover:underline uppercase tracking-widest italic">Details →</button>
+             <div className="md:col-span-7 bg-white p-6 rounded-2xl border border-natural-200 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 opacity-10 pointer-events-none">
+                  <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=400" className="w-full h-full object-cover" alt="Satellite" />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex justify-between items-center mb-6 relative z-10">
+                  <h3 className="font-bold text-natural-600">{t.cropVitality}</h3>
+                  <button onClick={() => setView('scanner')} className="text-xs font-black text-natural-500 hover:underline uppercase tracking-widest italic">{t.details} →</button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
                    <div className="sm:col-span-2 relative bg-natural-100 rounded-xl h-40 overflow-hidden border border-natural-200 group">
                       {/* Interactive map visualization */}
+                      <img 
+                        src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&q=80&w=1200" 
+                        className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:scale-110 transition-transform duration-700" 
+                        alt="Farm Map" 
+                      />
                       <div className="absolute inset-0 bg-natural-300 opacity-20"></div>
                       <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-emerald-500/40 rounded-full blur-3xl animate-pulse"></div>
                       <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
                          <div className="glass px-3 py-1.5 rounded-lg text-[9px] font-black italic shadow-xl border-white/50 translate-y-4 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
-                           FIELD A-1: 0.82 (VIGOROUS)
+                           FIELD A-1: 0.82 ({t.robust.toUpperCase()})
                          </div>
                       </div>
                       {/* Grid lines */}
@@ -473,11 +721,11 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
                    <div className="space-y-3">
                       <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
                          <p className="text-[10px] text-emerald-700 font-black uppercase tracking-tighter">Status</p>
-                         <p className="text-xl font-bold text-emerald-600 italic">Robust</p>
+                         <p className="text-xl font-bold text-emerald-600 italic">{t.robust}</p>
                       </div>
                       <div className="p-3 bg-natural-100 rounded-xl border border-natural-200">
-                         <p className="text-[10px] text-natural-600 font-black uppercase tracking-tighter">Anomalies</p>
-                         <p className="text-xl font-bold text-natural-700 italic">2 Plots</p>
+                         <p className="text-[10px] text-natural-600 font-black uppercase tracking-tighter">{t.anomalies}</p>
+                         <p className="text-xl font-bold text-natural-700 italic">2 {t.plots}</p>
                       </div>
                    </div>
                 </div>
@@ -486,16 +734,21 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
              {/* Market Pulse */}
-             <div className="bg-white p-6 rounded-2xl border border-natural-200 shadow-sm">
-                <h3 className="font-bold text-natural-600 mb-6 flex items-center gap-2 tracking-tight">
+             <div className="bg-white p-6 rounded-2xl border border-natural-200 shadow-sm relative overflow-hidden">
+                <img 
+                  src="https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=400" 
+                  className="absolute bottom-0 right-0 w-24 h-24 object-cover opacity-5 grayscale pointer-events-none" 
+                  alt="Crop info"
+                />
+                <h3 className="font-bold text-natural-600 mb-6 flex items-center gap-2 tracking-tight relative z-10">
                   <TrendingUp size={16} className="text-natural-400" />
-                  Market Pulse
+                  {t.marketPulse}
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-4 relative z-10">
                   {landscapeData?.marketPrices?.map((item: any, i: number) => (
                     <div key={i} className="flex items-center justify-between group">
                        <div className="flex items-center gap-3">
-                         <div className="w-8 h-8 bg-natural-100 rounded-lg flex items-center justify-center font-black text-natural-600 group-hover:bg-natural-600 group-hover:text-white transition-all italic">
+                         <div className="w-8 h-8 bg-natural-100 rounded-lg flex items-center justify-center font-black text-natural-600 group-hover:bg-natural-600 group-hover:text-white transition-all italic underline decoration-natural-300">
                             {item.crop[0]}
                          </div>
                          <p className="text-sm font-bold text-natural-700">{item.crop}</p>
@@ -516,25 +769,27 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
                 <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
                 <h3 className="font-bold mb-4 flex items-center gap-2 text-sm italic">
                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                  AgroSmart Expert Advice
+                  {t.expertAdvice}
                 </h3>
                 <div className="bg-white/10 p-3 rounded-xl border border-white/10 mb-4">
                   <p className="text-xs italic text-natural-50 leading-relaxed font-medium">
-                    \"Ahmad, I noticed yellowing on lower leaves of Wheat. Likely Nitrogen deficiency. Check soil moisture before fertilizing.\"
+                    {language === 'en' 
+                      ? "\"Ahmad, I noticed yellowing on lower leaves of Wheat. Likely Nitrogen deficiency. Check soil moisture before fertilizing.\""
+                      : "\"احمد، میں نے گندم کے نچلے پتوں پر زردی دیکھی ہے۔ غالبا نائٹروجن کی کمی ہے۔ کھاد ڈالنے سے پہلے مٹی کی نمی کو چیک کریں۔\""}
                   </p>
                 </div>
                 <div className="flex gap-2">
                    <button 
                     onClick={() => setView('chat')}
-                    className="flex-1 py-2 bg-white text-natural-600 rounded-lg text-[10px] font-black uppercase tracking-widest italic shadow-lg active:scale-95"
+                    className="flex-1 py-2 bg-white text-natural-600 rounded-lg text-[10px] font-black uppercase tracking-widest italic shadow-lg active:scale-95 transition-all hover:bg-natural-100"
                    >
-                     Talk to AI
+                     {t.talkToAi}
                    </button>
                    <button 
                     onClick={() => setView('scanner')}
-                    className="py-2 px-3 bg-natural-500/50 border border-white/10 text-white rounded-lg text-[10px] font-bold italic"
+                    className="py-2 px-3 bg-natural-500/50 border border-white/10 text-white rounded-lg text-[10px] font-bold italic hover:bg-natural-500 transition-all"
                    >
-                     Scan Photo
+                     {t.scanPhoto}
                    </button>
                 </div>
              </div>
@@ -544,33 +799,32 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
         {/* Sidebar Actions */}
         <div className="lg:col-span-4 space-y-6">
            <div className="bg-white p-6 rounded-2xl border border-natural-200 shadow-sm relative group overflow-hidden">
-              <h3 className="font-bold text-natural-600 mb-6">Smart Irrigation</h3>
+              <h3 className="font-bold text-natural-600 mb-6">{t.smartIrrigation}</h3>
               <div className="flex flex-col items-center justify-center p-4">
                  <div className="relative w-40 h-40 rounded-full border-[10px] border-natural-100 flex items-center justify-center">
-                    {/* SVG Progress Circle would be better here for the specific UI look */}
                     <svg className="absolute inset-0 w-full h-full -rotate-90">
                       <circle cx="80" cy="80" r="70" fill="none" stroke="currentColor" strokeWidth="10" className="text-natural-600" strokeDasharray="440" strokeDashoffset="140" style={{ transform: 'scale(1.1)', transformOrigin: 'center' }} />
                     </svg>
-                    <div className="text-center relative z-10">
+                    <div className="text-center relative z-10 transition-transform group-hover:scale-110">
                       <p className="text-3xl font-black text-natural-600 italic">64%</p>
-                      <p className="text-[10px] text-natural-400 font-bold uppercase tracking-widest">Soil Moisture</p>
+                      <p className="text-[10px] text-natural-400 font-bold uppercase tracking-widest">{t.soilMoisture}</p>
                     </div>
                  </div>
                  <button className="mt-8 w-full py-3 bg-natural-600 text-natural-50 rounded-xl text-xs font-black uppercase tracking-widest italic shadow-lg shadow-natural-600/20 active:scale-95 transition-all">
-                   Activate Drip Pulse
+                   {t.activateDrip}
                  </button>
               </div>
-              <div className="absolute -bottom-1 -right-1 opacity-10 font-black text-6xl text-natural-600 pointer-events-none italic">H2O</div>
+              <div className="absolute -bottom-2 -right-2 opacity-5 font-black text-8xl text-natural-600 pointer-events-none italic">H2O</div>
            </div>
 
            <div className="bg-white p-6 rounded-2xl border border-natural-200 shadow-sm">
-              <h3 className="font-bold text-natural-600 mb-4 tracking-tighter">Quick Operations</h3>
+              <h3 className="font-bold text-natural-600 mb-4 tracking-tighter">{t.quickOps}</h3>
               <div className="space-y-2">
                  {[
-                   { t: 'Optimize Fertilizer', emoji: '💊', color: 'bg-natural-50 text-natural-600' },
-                   { t: 'Gov Schemes', emoji: '🏛️', color: 'bg-natural-100 text-natural-500' },
-                   { t: 'Pest Prediction', emoji: '🦋', color: 'bg-amber-50 text-amber-600' },
-                   { t: 'Data Export', emoji: '📊', color: 'bg-blue-50 text-blue-600' },
+                   { t: t.optimizeFertilizer, emoji: '💊', color: 'bg-natural-50 text-natural-600' },
+                   { t: t.govtSchemes, emoji: '🏛️', color: 'bg-natural-100 text-natural-500' },
+                   { t: t.pestPrediction, emoji: '🦋', color: 'bg-amber-50 text-amber-600' },
+                   { t: t.dataExport, emoji: '📊', color: 'bg-blue-50 text-blue-600' },
                  ].map((op, i) => (
                    <button key={i} className={`w-full flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-natural-200 transition-all font-bold text-xs uppercase tracking-tight text-natural-700 italic group`}>
                       <span className={`p-2 rounded-lg ${op.color} group-hover:scale-110 transition-transform`}>{op.emoji}</span>
@@ -581,12 +835,12 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
            </div>
 
            {/* Emergency Alert Area */}
-           <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex gap-3">
+           <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex gap-3 shadow-inner">
               <div className="w-3 h-3 bg-red-500 rounded-full animate-ping mt-1 shrink-0"></div>
               <div>
-                <p className="text-[10px] font-black text-red-600 uppercase tracking-widest italic">Alert: Pest Warning</p>
-                <p className="text-xs text-red-700 font-medium leading-tight mt-1">
-                  Local Locust swarm predicted 30km North. Recommend preventive sprays.
+                <p className="text-[10px] font-black text-red-600 uppercase tracking-widest italic">{t.pestWarning}</p>
+                <p className="text-xs text-red-700 font-medium leading-tight mt-1 whitespace-pre-wrap">
+                  {t.locustAlert}
                 </p>
               </div>
            </div>
@@ -596,10 +850,14 @@ function Dashboard({ user, setView }: { user: any, setView: (v: View) => void })
   );
 }
 
-function DiseaseScanner() {
+function DiseaseScanner({ language }: { language: Language }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const t = translations[language];
 
   const handleUpload = async (e: any) => {
     const file = e.target.files[0];
@@ -607,11 +865,11 @@ function DiseaseScanner() {
     processImage(file);
   };
 
-  const processImage = async (file: File) => {
+  const processImage = async (file: File | Blob) => {
     setLoading(true);
     setResult(null);
     try {
-      const base64 = await toBase64(file);
+      const base64 = await toBase64(file as File);
       const res = await fetch('/api/analyze-plant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -620,7 +878,8 @@ function DiseaseScanner() {
       const data = await res.json();
       setResult(data);
     } catch (e) {
-      alert("Failed to analyze image");
+      console.error(e);
+      alert(language === 'en' ? "Failed to analyze image" : "تصویر کا تجزیہ کرنے میں ناکامی");
     } finally {
       setLoading(false);
     }
@@ -633,6 +892,48 @@ function DiseaseScanner() {
     reader.onerror = error => rej(error);
   });
 
+  const startCamera = async () => {
+    setCameraOpen(true);
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      alert(language === 'en' ? "Could not access camera" : "کیمرہ تک رسائی حاصل نہیں ہو سکی");
+      setCameraOpen(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+    }
+    setCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext('2d');
+      if (context) {
+        canvasRef.current.width = videoRef.current.videoWidth;
+        canvasRef.current.height = videoRef.current.videoHeight;
+        context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+        
+        canvasRef.current.toBlob((blob) => {
+          if (blob) {
+            processImage(blob);
+            stopCamera();
+          }
+        }, 'image/jpeg');
+      }
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
        <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm relative overflow-hidden group">
@@ -642,20 +943,22 @@ function DiseaseScanner() {
              <div className="mb-6 inline-block p-4 bg-natural-100 rounded-full border border-natural-200">
                <Camera className="w-12 h-12 text-natural-600" />
              </div>
-             <h2 className="text-3xl font-bold mb-4 font-heading text-natural-700">Plant Pathogen Diagnosis</h2>
+             <h2 className="text-3xl font-bold mb-4 font-heading text-natural-700">{translations[language].diseaseScan}</h2>
              <p className="text-natural-400 mb-8 max-w-md mx-auto italic font-medium leading-relaxed">
-               Capture or upload leaf patterns for real-time symptom analysis and organic intervention advice.
+               {language === 'en' 
+                ? "Capture or upload leaf patterns for real-time symptom analysis and organic intervention advice."
+                : "ریئل ٹائم علامات کے تجزیہ اور نامیاتی مداخلت کے مشورے کے لیے پتیوں کے نمونوں کو کیپچر یا اپ لوڈ کریں۔"}
              </p>
              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <label className="px-8 py-4 bg-natural-600 text-white rounded-2xl font-black uppercase tracking-widest italic cursor-pointer hover:bg-natural-700 shadow-xl active:scale-95 transition-all">
-                  Upload Photo
+                  {language === 'en' ? "Upload Photo" : "تصویر اپ لوڈ کریں"}
                   <input type="file" className="hidden" accept="image/*" onChange={handleUpload} />
                 </label>
                 <button 
-                  onClick={() => setCameraOpen(true)}
+                  onClick={startCamera}
                   className="px-8 py-4 bg-natural-100 text-natural-600 rounded-2xl font-black uppercase tracking-widest italic hover:bg-natural-200 shadow-sm border border-natural-200"
                 >
-                  Open Camera
+                  {language === 'en' ? "Open Camera" : "کیمرہ کھولیں"}
                 </button>
              </div>
              <p className="mt-8 text-[10px] text-natural-300 font-bold uppercase tracking-widest">Dataset: South Asian Crop Pathogens v4.2</p>
@@ -671,8 +974,8 @@ function DiseaseScanner() {
              >
                <Activity className="w-12 h-12 text-natural-600" />
              </motion.div>
-             <h3 className="text-xl font-bold">Analyzing Symptoms...</h3>
-             <p className="text-natural-400 mt-2">Comparing against 50,000+ disease patterns</p>
+             <h3 className="text-xl font-bold">{language === 'en' ? "Analyzing Symptoms..." : "علامات کا تجزیہ کیا جا رہا ہے..."}</h3>
+             <p className="text-natural-400 mt-2">{language === 'en' ? "Comparing against 50,000+ disease patterns" : "50,000 سے زیادہ بیماریوں کے نمونوں کے ساتھ موازنہ"}</p>
            </div>
          )}
 
@@ -697,7 +1000,7 @@ function DiseaseScanner() {
                   <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-natural-50 p-6 rounded-2xl border border-natural-100">
                       <h4 className="font-bold flex items-center gap-2 mb-4 text-natural-700">
-                        <Droplets size={18} className="text-blue-500" /> Treatments
+                        <Droplets size={18} className="text-blue-500" /> {language === 'en' ? "Treatments" : "علاج"}
                       </h4>
                       <ul className="space-y-2">
                         {result.treatments.map((t: string, i: number) => (
@@ -709,7 +1012,7 @@ function DiseaseScanner() {
                     </div>
                     <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
                       <h4 className="font-bold flex items-center gap-2 mb-4 text-emerald-800">
-                        <Leaf size={18} className="text-emerald-500" /> Organic Options
+                        <Leaf size={18} className="text-emerald-500" /> {language === 'en' ? "Organic Options" : "نامیاتی اختیارات"}
                       </h4>
                       <ul className="space-y-2">
                         {result.organicAlternatives.map((t: string, i: number) => (
@@ -725,7 +1028,7 @@ function DiseaseScanner() {
                     onClick={() => setResult(null)}
                     className="mt-8 w-full py-4 bg-natural-600 text-white rounded-2xl font-bold hover:bg-natural-700 transition-all flex items-center justify-center gap-3"
                   >
-                    Scan Another Plant
+                    {language === 'en' ? "Scan Another Plant" : "ایک اور پودے کو اسکین کریں"}
                   </button>
                </div>
                
@@ -742,40 +1045,23 @@ function DiseaseScanner() {
          )}
        </div>
 
-       {/* Camera simulate modal */}
        {cameraOpen && (
          <div className="fixed inset-0 z-50 flex items-center justify-center bg-natural-700/90 p-6 backdrop-blur-sm">
            <div className="w-full max-w-sm aspect-[9/16] bg-natural-600 rounded-[40px] border-8 border-natural-500 relative overflow-hidden shadow-2xl">
-             <div className="absolute top-4 left-1/2 -translate-x-1/2 w-16 h-4 bg-natural-500 rounded-full"></div>
-             <button onClick={() => setCameraOpen(false)} className="absolute top-4 right-4 p-2 text-natural-300 hover:text-white transition-colors"><X size={24}/></button>
+             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+             <div className="absolute top-4 left-1/2 -translate-x-1/2 w-16 h-4 bg-natural-500/50 rounded-full backdrop-blur-md"></div>
+             <button onClick={stopCamera} className="absolute top-4 right-4 p-2 text-white/50 hover:text-white transition-colors bg-black/20 rounded-full backdrop-blur-md"><X size={24}/></button>
              
-             <div className="w-full h-full flex flex-col items-center justify-center text-white p-8 text-center">
-               <Camera size={64} className="mb-4 text-natural-300 animate-pulse" />
-               <p className="text-lg font-bold font-heading">Camera Interlink</p>
-               <p className="text-sm text-natural-200 mb-12 italic">Target leaf patterns for analysis</p>
-               
-               <button 
-                  onClick={() => {
-                    setCameraOpen(false);
-                    // In a real app we'd capture frame, here we mock it
-                    setLoading(true);
-                    setTimeout(() => {
-                      setResult({
-                        crop: "Tomato",
-                        disease: "Early Blight (Alternaria Solani)",
-                        confidence: 94.2,
-                        severity: "Medium",
-                        treatments: ["Apply copper-based fungicides", "Prune infected lower leaves", "Improve air circulation"],
-                        organicAlternatives: ["Spray Neem Oil solution", "Use Baking Soda and Liquid Soap spray", "Mulch with straw to prevent soil splash"]
-                      });
-                      setLoading(false);
-                    }, 2000);
-                  }}
-                  className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center active:scale-95 transition-all shadow-xl"
-               >
-                 <div className="w-12 h-12 bg-white rounded-full"></div>
-               </button>
+             <div className="absolute bottom-12 left-0 w-full flex flex-col items-center gap-6 px-8 text-center pointer-events-none">
+                <p className="text-white text-sm font-bold shadow-lg bg-black/40 px-4 py-1.5 rounded-full backdrop-blur-md italic font-sans">{language === 'en' ? "Target leaf patterns" : "پتی کے نمونوں کو نشانہ بنائیں"}</p>
+                <button 
+                  onClick={capturePhoto}
+                  className="w-20 h-20 rounded-full border-4 border-white/50 flex items-center justify-center active:scale-95 transition-all shadow-2xl pointer-events-auto bg-white/20 backdrop-blur-sm"
+                >
+                  <div className="w-16 h-16 bg-white rounded-full shadow-lg shadow-white/20"></div>
+                </button>
              </div>
+             <canvas ref={canvasRef} className="hidden" />
            </div>
          </div>
        )}
@@ -783,14 +1069,24 @@ function DiseaseScanner() {
   );
 }
 
-function AIChatView({ user }: { user: any }) {
+function AIChatView({ user, language }: { user: any, language: Language }) {
   const [messages, setMessages] = useState([
-    { role: 'ai', text: `Hello ${user?.displayName?.split(' ')[0] || 'Farmer'}! I'm your AgroSmart AI Assistant. How can I help you today? You can ask me about crops, weather, or pest control.` }
+    { role: 'ai', text: language === 'en' 
+      ? `Hello ${user?.displayName?.split(' ')[0] || 'Farmer'}! I'm your AgroSmart AI Assistant. How can I help you today? You can ask me about crops, weather, or pest control.`
+      : `ہیلو ${user?.displayName?.split(' ')[0] || 'کاشتکار'}! میں آپ کا ایگرو اسمارٹ اے آئی اسسٹنٹ ہوں۔ آج میں آپ کی کیا مدد کر سکتا ہوں؟ آپ مجھ سے فصلوں، موسم، یا کیڑوں پر قابو پانے کے بارے میں پوچھ سکتے ہیں۔` }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const send = async () => {
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!input.trim() || loading) return;
     const userMsg = input;
     setInput('');
@@ -801,20 +1097,20 @@ function AIChatView({ user }: { user: any }) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg })
+        body: JSON.stringify({ message: userMsg, language })
       });
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'ai', text: data.text }]);
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'ai', text: "Sorry, I'm having trouble connecting right now." }]);
+      setMessages(prev => [...prev, { role: 'ai', text: language === 'en' ? "Sorry, I'm having trouble connecting right now." : "معذرت، مجھے اس وقت رابطہ کرنے میں دشواری ہو رہی ہے۔" }]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto h-[calc(100vh-180px)] flex flex-col bg-white rounded-[40px] border border-natural-200 overflow-hidden shadow-2xl">
-       <div className="p-5 border-b border-natural-100 flex items-center justify-between bg-natural-600 text-white">
+    <div className="max-w-4xl mx-auto h-[calc(100vh-180px)] flex flex-col bg-white rounded-[40px] border border-natural-200 overflow-hidden shadow-2xl relative">
+       <div className="p-5 border-b border-natural-100 flex items-center justify-between bg-natural-600 text-white relative z-10 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/20 rounded-xl">
               <MessageSquare size={20} />
@@ -824,74 +1120,72 @@ function AIChatView({ user }: { user: any }) {
               <p className="text-[9px] text-emerald-400 font-black uppercase tracking-widest italic leading-none mt-0.5 animate-pulse">● Online & Ready</p>
             </div>
           </div>
-          <div className="flex -space-x-2">
-             {[1,2].map(i => <img key={i} src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i+10}`} className="w-8 h-8 rounded-full border-2 border-natural-600" />)}
-          </div>
+          <button className="text-white/50 hover:text-white transition-colors"><Info size={18} /></button>
        </div>
 
-       <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-natural-50/30">
+       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-natural-50/50 scrollbar-hide">
+          <div className="absolute inset-0 opacity-5 pointer-events-none overflow-hidden">
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-natural-600 rounded-full"></div>
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] border border-natural-600 rounded-full"></div>
+          </div>
+
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] p-4 rounded-3xl italic font-medium shadow-sm border ${
-                m.role === 'user' 
-                  ? 'bg-natural-600 text-white rounded-tr-none border-natural-500' 
-                  : 'bg-white text-natural-700 rounded-tl-none border-natural-100'
-              }`}>
-                {m.text}
-              </div>
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} relative z-10`}>
+               <div className={`max-w-[85%] px-5 py-4 rounded-3xl text-sm leading-relaxed shadow-sm transition-all hover:shadow-md ${m.role === 'user' 
+                 ? 'bg-natural-600 text-white rounded-tr-none font-medium' 
+                 : 'bg-white text-natural-700 border border-natural-100 rounded-tl-none italic'}`}>
+                  {m.text}
+               </div>
             </div>
           ))}
           {loading && (
-            <div className="flex justify-start">
-               <div className="bg-white p-4 rounded-3xl rounded-tl-none border border-natural-100 flex gap-1 shadow-sm">
-                 <div className="w-1.5 h-1.5 bg-natural-300 rounded-full animate-bounce"></div>
-                 <div className="w-1.5 h-1.5 bg-natural-300 rounded-full animate-bounce delay-75"></div>
-                 <div className="w-1.5 h-1.5 bg-natural-300 rounded-full animate-bounce delay-150"></div>
+            <div className="flex justify-start relative z-10">
+               <div className="bg-white px-5 py-4 rounded-3xl rounded-tl-none border border-natural-100 shadow-sm">
+                  <div className="flex gap-1.5 items-center">
+                    <span className="w-1.5 h-1.5 bg-natural-400 rounded-full animate-bounce [animation-duration:0.8s]"></span>
+                    <span className="w-1.5 h-1.5 bg-natural-400 rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.2s]"></span>
+                    <span className="w-1.5 h-1.5 bg-natural-400 rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.4s]"></span>
+                    <span className="text-[10px] text-natural-300 font-black uppercase tracking-widest ml-2 italic">Generating</span>
+                  </div>
                </div>
             </div>
           )}
        </div>
 
-       <div className="p-5 bg-white border-t border-natural-100">
-          <div className="flex gap-3">
-            <input 
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && send()}
-              placeholder="Query the field knowledge base..."
-              className="flex-1 p-4 bg-natural-100 border border-natural-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-natural-600/10 italic font-medium"
-            />
-            <button 
-              onClick={send}
-              className="p-4 bg-natural-600 text-white rounded-2xl hover:bg-natural-700 transition-all shadow-xl active:scale-95"
-            >
-              <ChevronRight />
-            </button>
-          </div>
-          <div className="mt-4 flex gap-4 overflow-x-auto pb-1 text-[9px] font-black uppercase italic tracking-widest text-natural-400 whitespace-nowrap scrollbar-hide px-1">
-             <button onClick={() => setInput('Wheat sowing advice for Punjab?')} className="hover:text-natural-600 transition-colors">Punjab Sowing Window</button>
-             <button onClick={() => setInput('Organic pest control for citrus?')} className="hover:text-natural-600 transition-colors">Citrus Pest Stewardship</button>
-             <button onClick={() => setInput('Soil moisture threshold?')} className="hover:text-natural-600 transition-colors">Moisture Thresholds</button>
-          </div>
-       </div>
+       <form onSubmit={send} className="p-6 bg-white border-t border-natural-100 flex gap-4 relative z-10 shadow-[0_-10px_20_rgba(0,0,0,0.02)]">
+          <input 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={language === 'en' ? "Consult with AI about your farm..." : "اپنے فارم کے بارے میں اے آئی سے مشورہ کریں..."}
+            className="flex-1 px-8 py-4 bg-natural-50 text-natural-700 border border-natural-200 rounded-full focus:outline-none focus:ring-2 focus:ring-natural-600 transition-all text-sm font-medium italic shadow-inner"
+          />
+          <button 
+            type="submit"
+            disabled={!input.trim() || loading}
+            className="p-4 bg-natural-600 text-white rounded-full shadow-xl shadow-natural-600/20 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all hover:bg-natural-700"
+          >
+            <Zap className={`w-5 h-5 ${loading ? 'animate-pulse' : ''}`} />
+          </button>
+       </form>
     </div>
   );
 }
 
-function AdminView({ user }: { user: FirebaseUser }) {
+function AdminView({ user, language }: { user: FirebaseUser, language: Language }) {
+  const t = translations[language];
   return (
     <div className="max-w-4xl mx-auto space-y-6">
        <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm relative overflow-hidden">
           <div className="flex justify-between items-center mb-12 relative z-10">
              <div>
-                <h2 className="text-2xl font-bold text-natural-600 font-heading tracking-tight underline decoration-natural-300 decoration-4 underline-offset-8">Admin Panel</h2>
-                <p className="text-sm text-natural-400 mt-4 italic">Operator: {user.email}</p>
+                <h2 className="text-2xl font-bold text-natural-600 font-heading tracking-tight underline decoration-natural-300 decoration-4 underline-offset-8">{t.adminPanel}</h2>
+                <p className="text-sm text-natural-400 mt-4 italic">{language === 'en' ? 'Operator' : 'آپریٹر'}: {user.email}</p>
              </div>
              <button 
               onClick={() => signOut(auth)}
               className="px-6 py-2 bg-natural-100 text-natural-600 border border-natural-200 rounded-xl text-[10px] font-black uppercase tracking-widest italic hover:bg-natural-600 hover:text-white transition-all font-sans"
              >
-               Sign Out
+               {t.signOut}
              </button>
           </div>
 
@@ -923,16 +1217,145 @@ function AdminView({ user }: { user: FirebaseUser }) {
   );
 }
 
-function MarketPriceView() {
-  return <Placeholder icon={TrendingUp} title="Market Trends" desc="Explore live mandi prices and predictive demand analytics across 500+ regional markets." />;
+function MarketPriceView({ language }: { language: Language }) {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/landscape-updates')
+      .then(res => res.json())
+      .then(d => {
+        setData(d.marketPrices || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="py-24 text-center animate-pulse"><TrendingUp size={48} className="mx-auto mb-4 text-natural-200" /></div>;
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+       <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm">
+          <h2 className="text-2xl font-bold mb-8 text-natural-600 flex items-center gap-3">
+             <TrendingUp className="text-natural-400" />
+             {language === 'en' ? "Market Trends & Mandi Prices" : "مارکیٹ کے رجحانات اور منڈی کی قیمتیں"}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             {data.map((item, i) => (
+                <div key={i} className="p-6 bg-natural-50 rounded-2xl border border-natural-100 flex justify-between items-center group hover:bg-white hover:shadow-xl transition-all">
+                   <div>
+                      <p className="text-[10px] font-black uppercase text-natural-400 mb-1 tracking-widest">{language === 'en' ? "Regional Market" : "علاقائی مارکیٹ"}</p>
+                      <h3 className="text-lg font-bold text-natural-700">{item.crop}</h3>
+                   </div>
+                   <div className="text-right">
+                      <p className="text-xl font-black text-natural-600 italic">Rs. {item.pricePerKg}/kg</p>
+                      <span className={`text-[10px] font-black uppercase italic ${item.trend === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
+                         {item.trend === 'up' ? '↗ Bullish' : '↘ Bearish'}
+                      </span>
+                   </div>
+                </div>
+             ))}
+          </div>
+       </div>
+    </div>
+  );
 }
 
-function WeatherView() {
-  return <Placeholder icon={CloudSun} title="Weather Forecast" desc="Hyperlocal precipitation mapping and crop-specific sowing recommendations powered by NASA data." />;
+function WeatherView({ language }: { language: Language }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/landscape-updates')
+      .then(res => res.json())
+      .then(d => {
+        setData(d.weather);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="py-24 text-center animate-pulse"><CloudSun size={48} className="mx-auto mb-4 text-natural-200" /></div>;
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+       <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm text-center">
+          <div className="mb-8">
+             <CloudSun size={64} className="mx-auto text-blue-400 mb-4" />
+             <h2 className="text-4xl font-bold text-natural-700">{data?.temp}°C</h2>
+             <p className="text-lg font-black uppercase italic text-natural-400 tracking-widest">{data?.condition}</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+             <div className="p-4 bg-natural-50 rounded-2xl border border-natural-100">
+                <p className="text-[10px] font-black uppercase text-natural-400 mb-1 tracking-tighter">Humidity</p>
+                <p className="text-lg font-bold text-blue-600">{data?.humidity}%</p>
+             </div>
+             <div className="p-4 bg-natural-50 rounded-2xl border border-natural-100">
+                <p className="text-[10px] font-black uppercase text-natural-400 mb-1 tracking-tighter">Wind Speed</p>
+                <p className="text-lg font-bold text-natural-600">{data?.windSpeed} km/h</p>
+             </div>
+             <div className="p-4 bg-natural-50 rounded-2xl border border-natural-100 col-span-2 sm:col-span-1">
+                <p className="text-[10px] font-black uppercase text-natural-400 mb-1 tracking-tighter">Precipitation</p>
+                <p className="text-lg font-bold text-emerald-600">12%</p>
+             </div>
+          </div>
+          <div className="mt-8 p-6 bg-blue-50 border border-blue-100 rounded-3xl text-blue-800 italic font-medium">
+             {language === 'en' 
+              ? "NASA Grounding: Optimal soil moisture for paddy sowing detected in Southern Punjab belt. Recommend irrigation by Fri PM."
+              : "ناسا گراؤنڈنگ: جنوبی پنجاب پٹی میں دھان کی بوائی کے لیے ٹیڑھی مٹی کی نمی کا پتہ چلا ہے۔ جمعہ کی سہ پہر تک آبپاشی کی سفارش کی جاتی ہے۔"}
+          </div>
+       </div>
+    </div>
+  );
 }
 
-function CalendarView() {
-  return <Placeholder icon={Calendar} title="Agri-Calendar" desc="Automatically generated seasonal workflow based on your crop selections and local environment." />;
+function CalendarView({ language }: { language: Language }) {
+  const [calendar, setCalendar] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/agri-calendar')
+      .then(res => res.json())
+      .then(d => {
+        setCalendar(d.calendar || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+       <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm">
+          <h2 className="text-2xl font-bold mb-8 text-natural-600 flex items-center gap-3">
+             <Calendar className="text-natural-400" />
+             {language === 'en' ? "Your seasonal Workflow" : "آپ کا موسمی کام"}
+          </h2>
+          {loading ? (
+             <div className="space-y-4 animate-pulse">
+                {[1,2,3].map(i => <div key={i} className="h-20 bg-natural-50 rounded-2xl"></div>)}
+             </div>
+          ) : (
+             <div className="space-y-4">
+                {calendar.map((item, i) => (
+                   <div key={i} className="flex gap-4 p-4 border-l-4 border-emerald-500 bg-natural-50 rounded-r-2xl transition-all hover:bg-white hover:shadow-lg">
+                      <div className="w-24 shrink-0">
+                         <p className="text-sm font-black uppercase text-emerald-600 italic">{item.month}</p>
+                         <p className="text-[10px] font-bold text-natural-400">{item.crop}</p>
+                      </div>
+                      <div className="flex-1 flex flex-wrap gap-2">
+                         {item.activities.map((act: string, j: number) => (
+                            <span key={j} className="px-3 py-1 bg-white border border-natural-200 rounded-full text-xs font-medium text-natural-700 italic">
+                               {act}
+                            </span>
+                         ))}
+                      </div>
+                   </div>
+                ))}
+             </div>
+          )}
+       </div>
+    </div>
+  );
 }
 
 function SchemesView() {

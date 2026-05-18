@@ -23,11 +23,11 @@ app.use(express.json({ limit: '10mb' }));
 // AI Chat Assistant
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, language } = req.body;
     const chat = ai.chats.create({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash-latest",
       config: {
-        systemInstruction: "You are AgroSmart AI, an expert agricultural assistant. Provide advice on crop management, disease prevention, and sustainable farming. Keep responses helpful and concise. Support multiple languages like English, Urdu, Hindi, and Punjabi.",
+        systemInstruction: `You are AgroSmart AI, an expert agricultural assistant. Provide advice on crop management, disease prevention, and sustainable farming. Keep responses helpful and concise. Current user language: ${language || 'en'}. Respond in the language requested. Support English, Urdu, Hindi and Punjabi.`,
       },
     });
 
@@ -109,6 +109,40 @@ app.get("/api/landscape-updates", async (req, res) => {
                   crop: { type: Type.STRING },
                   pricePerKg: { type: Type.NUMBER },
                   trend: { type: Type.STRING, enum: ["up", "down", "stable"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    res.json(JSON.parse(response.text));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Agri-Calendar Endpoint
+app.get("/api/agri-calendar", async (req, res) => {
+  try {
+    const { crop, location } = req.query;
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Generate a seasonal agriculture calendar for ${crop || 'Wheat and Paddy'} in ${location || 'Punjab, Pakistan'}. Include months and key activities like Sowing, Irrigation, Fertilization, and Harvesting. Format as JSON.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            calendar: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  month: { type: Type.STRING },
+                  activities: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  crop: { type: Type.STRING }
                 }
               }
             }
