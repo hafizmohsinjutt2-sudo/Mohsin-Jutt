@@ -19,14 +19,26 @@ import {
   Droplets,
   Zap,
   Info,
-  Calendar
+  Calendar,
+  LineChart as LineChartIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  AreaChart,
+  Area
+} from 'recharts';
 import { auth, loginWithGoogle, loginAnonymously } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
 // --- Types ---
-type View = 'dashboard' | 'scanner' | 'weather' | 'market' | 'chat' | 'calendar' | 'schemes' | 'admin';
+type View = 'dashboard' | 'scanner' | 'weather' | 'market' | 'chat' | 'calendar' | 'schemes' | 'admin' | 'market-intel';
 type Language = 'en' | 'ur';
 
 const translations = {
@@ -35,6 +47,7 @@ const translations = {
     diseaseScan: "Disease Scan",
     forecast: "Forecast",
     marketPrices: "Market Prices",
+    marketIntel: "Market Intelligence",
     aiAdvisor: "AI Advisor",
     agriCalendar: "Agri-Calendar",
     govtSchemes: "Govt Schemes",
@@ -49,6 +62,7 @@ const translations = {
     scanTitle: "Plant Symptom Analysis",
     weatherTitle: "Weather & Sowing Advice",
     marketTitle: "Market Price Insights",
+    marketIntelTitle: "Pakistan Smart Market Intelligence",
     chatTitle: "AI Expert Consult",
     weatherForecast: "Weather Forecast",
     cropVitality: "Crop Vitality (NDVI)",
@@ -70,12 +84,37 @@ const translations = {
     optimizeFertilizer: "Optimize Fertilizer",
     pestPrediction: "Pest Prediction",
     dataExport: "Data Export",
+    bestSellTime: "Best Time to Sell",
+    holdStrong: "Hold Strong",
+    priceTrend: "Price Trend",
+    mandiRates: "Mandi Rates",
+    cityMandi: "City-wise Mandi Rates",
+    aiForecast: "AI Price Forecasting (30 Days)",
+    agriSupplies: "Agri Supplies",
+    pesticides: "Pesticides",
+    fertilizers: "Fertilizers",
+    seeds: "Seeds",
+    demand: "Demand",
+    mandiAlert: "Mandi Alert",
+    recommendation: "Recommendation",
+    aiMarketInsights: "AI Market Insights",
+    bestSellingWindow: "Best Selling Window",
+    sellAdvice: "Prices are expected to peak due to a temporary supply shortage. High export demand detected.",
+    scanAnother: "Scan Another Plant",
+    analyzingSymptoms: "Analyzing Symptoms...",
+    comparingPatterns: "Comparing against 50,000+ disease patterns",
+    detectedAreas: "Detected Areas",
+    currentRate: "Current Rate",
+    aiPredicted30d: "30d AI Predicted",
+    severity: "Severity",
+    aiConfidence: "AI Confidence"
   },
   ur: {
     overview: "جائزہ",
-    diseaseScan: "بیماریوں کی جانچ",
+    diseaseScan: "بیماری کی تشخیص",
     forecast: "موسم کی پیش گوئی",
     marketPrices: "مارکیٹ کی قیمتیں",
+    marketIntel: "مارکیٹ انٹیلیجنس",
     aiAdvisor: "اے آئی مشیر",
     agriCalendar: "زرعی کیلنڈر",
     govtSchemes: "سرکاری سکیمیں",
@@ -90,6 +129,7 @@ const translations = {
     scanTitle: "پودوں کی علامات کا تجزیہ",
     weatherTitle: "موسم اور بوائی کا مشورہ",
     marketTitle: "مارکیٹ کی قیمتوں کی معلومات",
+    marketIntelTitle: "پاکستان اسمارٹ مارکیٹ انٹیلیجنس",
     chatTitle: "اے آئی ماہر سے مشورہ",
     weatherForecast: "موسم کی پیش گوئی",
     cropVitality: "فصل کی حیات (این ڈی وی آئی)",
@@ -102,7 +142,7 @@ const translations = {
     activateDrip: "ڈرپ پلس کو چالو کریں",
     quickOps: "فوری آپریشنز",
     pestWarning: "انتباہ: کیڑوں کی وارننگ",
-    locustAlert: "مقامی ٹڈی دل کے جھنڈ کی 30 کلومیٹر شمال میں پیش گوئی کی گئی ہے۔ حفاظتی سپرے کی سفارش کی جاتی ہے۔",
+    locustAlert: "وارننگ: ٹڈی دل کی نقل مکانی رپورٹ ہوئی ہے۔ تدارک کے لیے اسپرے شروع کریں۔",
     details: "تفصیلات",
     live: "براہ راست",
     robust: "مضبوط",
@@ -111,6 +151,30 @@ const translations = {
     optimizeFertilizer: "کھاد کو بہتر بنائیں",
     pestPrediction: "کیڑوں کی پیش گوئی",
     dataExport: "ڈیٹا ایکسپورٹ",
+    bestSellTime: "فروخت کرنے کا بہترین وقت",
+    holdStrong: "ہولڈ کریں",
+    priceTrend: "قیمت کا رجحان",
+    mandiRates: "منڈی کے نرخ",
+    cityMandi: "شہر کے لحاظ سے منڈی کے نرخ",
+    aiForecast: "اے آئی قیمت کی پیشن گوئی (30 دن)",
+    agriSupplies: "زرعی سامان",
+    pesticides: "کیڑے مار ادویات",
+    fertilizers: "کھادیں",
+    seeds: "بیج",
+    demand: "طلب",
+    mandiAlert: "منڈی الرٹ",
+    recommendation: "سفارش",
+    aiMarketInsights: "اے آئی مارکیٹ بصیرت",
+    bestSellingWindow: "فروخت کے لیے بہترین وقت",
+    sellAdvice: "عارضی سپلائی کی کمی کی وجہ سے قیمتیں بڑھنے کی توقع ہے۔ برآمدات کی زیادہ طلب دیکھی گئی۔",
+    scanAnother: "ایک اور پودے کو اسکین کریں",
+    analyzingSymptoms: "علامات کا تجزیہ کیا جا رہا ہے...",
+    comparingPatterns: "50,000 سے زیادہ بیماریوں کے نمونوں کے ساتھ موازنہ",
+    detectedAreas: "نشاندہی شدہ علاقے",
+    currentRate: "موجودہ ریٹ",
+    aiPredicted30d: "30 دن کی پیش گوئی",
+    severity: "شدت",
+    aiConfidence: "اے آئی اعتماد"
   }
 };
 
@@ -127,7 +191,7 @@ const Sidebar = ({ currentView, setView, isMobileOpen, setIsMobileOpen, language
     { id: 'dashboard', icon: LayoutDashboard, label: t.overview },
     { id: 'scanner', icon: Camera, label: t.diseaseScan },
     { id: 'weather', icon: CloudSun, label: t.forecast },
-    { id: 'market', icon: TrendingUp, label: t.marketPrices },
+    { id: 'market-intel', icon: TrendingUp, label: t.marketIntel },
     { id: 'chat', icon: MessageSquare, label: t.aiAdvisor },
     { id: 'calendar', icon: Calendar, label: t.agriCalendar },
     { id: 'schemes', icon: Info, label: t.govtSchemes },
@@ -234,7 +298,7 @@ export default function App() {
     </div>
   );
 
-  if (!user) return <LandingPage />;
+  if (!user) return <LandingPage setUser={setUser} setIsAdmin={setIsAdmin} />;
 
   return (
     <div className="min-h-screen bg-natural-50" dir={language === 'ur' ? 'rtl' : 'ltr'}>
@@ -361,6 +425,7 @@ export default function App() {
               {view === 'scanner' && <DiseaseScanner language={language} />}
               {view === 'chat' && <AIChatView user={user} language={language} />}
               {view === 'market' && <MarketPriceView language={language} />}
+              {view === 'market-intel' && <MarketIntelligenceView language={language} />}
               {view === 'weather' && <WeatherView language={language} />}
               {view === 'calendar' && <CalendarView language={language} />}
               {view === 'schemes' && <SchemesView language={language} />}
@@ -375,7 +440,7 @@ export default function App() {
 
 // --- Sub-views ---
 
-function LandingPage() {
+function LandingPage({ setUser, setIsAdmin }: { setUser: (u: any) => void, setIsAdmin: (a: boolean) => void }) {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>('en');
@@ -619,8 +684,8 @@ function Dashboard({ user, setView, language }: { user: any, setView: (v: View) 
   }, []);
 
   const stats = [
-    { label: language === 'en' ? 'Crop Health' : 'فصل کی صحت', value: 'Monitoring...', icon: Activity, detail: 'AI Active', color: 'text-natural-600' },
-    { label: language === 'en' ? 'Soil Moisture' : 'مٹی کی نمی', value: 'Awaiting Scan', icon: Droplets, detail: 'Sensor Link', color: 'text-blue-600' },
+    { label: language === 'en' ? 'Current Temp' : 'موجودہ درجہ حرارت', value: landscapeData?.weather ? `${landscapeData.weather.temp}°C` : 'Fetching...', icon: CloudSun, detail: landscapeData?.weather?.condition || 'Weather Link', color: 'text-natural-600' },
+    { label: language === 'en' ? 'Market Sentiment' : 'مارکیٹ کا رجحان', value: landscapeData?.marketPrices ? (landscapeData.marketPrices[0]?.trend === 'up' ? 'Bullish' : 'Stable') : 'Analyzing...', icon: TrendingUp, detail: landscapeData?.marketPrices?.[0]?.crop || 'Market Link', color: 'text-emerald-600' },
     { label: language === 'en' ? 'Risk Alert' : 'خطرے کا انتباہ', value: 'Zero Risk', icon: Zap, detail: 'Clean Scan', color: 'text-amber-600' },
     { label: language === 'en' ? 'Yield Est.' : 'پیداوار کا تخمینہ', value: 'Calculating...', icon: TrendingUp, detail: 'Data Link', color: 'text-natural-600' },
   ];
@@ -754,9 +819,9 @@ function Dashboard({ user, setView, language }: { user: any, setView: (v: View) 
                          <p className="text-sm font-bold text-natural-700">{item.crop}</p>
                        </div>
                        <div className="text-right">
-                         <p className="text-sm font-black text-natural-600 italic">Rs. {item.pricePerKg}/kg</p>
+                         <p className="text-sm font-black text-natural-600 italic">{item.price}</p>
                          <p className={`text-[10px] font-bold ${item.trend === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
-                           {item.trend === 'up' ? '↗ +2.4%' : '↘ -1.1%'}
+                           {item.trend === 'up' ? '↗ Bullish' : item.trend === 'down' ? '↘ Bearish' : '→ Stable'}
                          </p>
                        </div>
                     </div>
@@ -821,12 +886,16 @@ function Dashboard({ user, setView, language }: { user: any, setView: (v: View) 
               <h3 className="font-bold text-natural-600 mb-4 tracking-tighter">{t.quickOps}</h3>
               <div className="space-y-2">
                  {[
-                   { t: t.optimizeFertilizer, emoji: '💊', color: 'bg-natural-50 text-natural-600' },
-                   { t: t.govtSchemes, emoji: '🏛️', color: 'bg-natural-100 text-natural-500' },
-                   { t: t.pestPrediction, emoji: '🦋', color: 'bg-amber-50 text-amber-600' },
-                   { t: t.dataExport, emoji: '📊', color: 'bg-blue-50 text-blue-600' },
+                   { t: t.optimizeFertilizer, emoji: '💊', color: 'bg-natural-50 text-natural-600', view: 'dashboard' },
+                   { t: t.govtSchemes, emoji: '🏛️', color: 'bg-natural-100 text-natural-500', view: 'schemes' },
+                   { t: t.pestPrediction, emoji: '🦋', color: 'bg-amber-50 text-amber-600', view: 'dashboard' },
+                   { t: t.dataExport, emoji: '📊', color: 'bg-blue-50 text-blue-600', view: 'dashboard' },
                  ].map((op, i) => (
-                   <button key={i} className={`w-full flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-natural-200 transition-all font-bold text-xs uppercase tracking-tight text-natural-700 italic group`}>
+                   <button 
+                    key={i} 
+                    onClick={() => op.view !== 'dashboard' && setView(op.view as any)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-natural-200 transition-all font-bold text-xs uppercase tracking-tight text-natural-700 italic group active:scale-95`}
+                   >
                       <span className={`p-2 rounded-lg ${op.color} group-hover:scale-110 transition-transform`}>{op.emoji}</span>
                       {op.t}
                    </button>
@@ -873,13 +942,19 @@ function DiseaseScanner({ language }: { language: Language }) {
       const res = await fetch('/api/analyze-plant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64.split(',')[1] })
+        body: JSON.stringify({ 
+          imageBase64: base64.split(',')[1],
+          language 
+        })
       });
+      
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Analysis failed");
+      
       setResult(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert(language === 'en' ? "Failed to analyze image" : "تصویر کا تجزیہ کرنے میں ناکامی");
+      alert(language === 'en' ? `Error: ${e.message}` : `خرابی: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -1003,7 +1078,7 @@ function DiseaseScanner({ language }: { language: Language }) {
                         <Droplets size={18} className="text-blue-500" /> {language === 'en' ? "Treatments" : "علاج"}
                       </h4>
                       <ul className="space-y-2">
-                        {result.treatments.map((t: string, i: number) => (
+                        {result.treatments?.map((t: string, i: number) => (
                           <li key={i} className="text-sm text-natural-600 flex items-start gap-2 italic">
                             <span className="text-blue-500 font-bold">•</span> {t}
                           </li>
@@ -1015,7 +1090,7 @@ function DiseaseScanner({ language }: { language: Language }) {
                         <Leaf size={18} className="text-emerald-500" /> {language === 'en' ? "Organic Options" : "نامیاتی اختیارات"}
                       </h4>
                       <ul className="space-y-2">
-                        {result.organicAlternatives.map((t: string, i: number) => (
+                        {result.organicAlternatives?.map((t: string, i: number) => (
                           <li key={i} className="text-sm text-emerald-800 flex items-start gap-2 italic">
                             <span className="text-emerald-500 font-bold">•</span> {t}
                           </li>
@@ -1028,7 +1103,7 @@ function DiseaseScanner({ language }: { language: Language }) {
                     onClick={() => setResult(null)}
                     className="mt-8 w-full py-4 bg-natural-600 text-white rounded-2xl font-bold hover:bg-natural-700 transition-all flex items-center justify-center gap-3"
                   >
-                    {language === 'en' ? "Scan Another Plant" : "ایک اور پودے کو اسکین کریں"}
+                    {t.scanAnother}
                   </button>
                </div>
                
@@ -1036,8 +1111,8 @@ function DiseaseScanner({ language }: { language: Language }) {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                   <img src="https://images.unsplash.com/photo-1597103403300-8b1e4e6f4770?auto=format&fit=crop&q=80&w=300" className="w-full h-full object-cover" alt="Plant Leaf"/>
                   <div className="absolute bottom-4 left-4 text-white">
-                    <p className="text-[10px] opacity-70 uppercase font-black">AI Segmentation</p>
-                    <p className="font-bold">Detected Areas</p>
+                    <p className="text-[10px] opacity-70 uppercase font-black">{language === 'en' ? 'AI Segmentation' : 'اے آئی سیگمنٹیشن'}</p>
+                    <p className="font-bold">{t.detectedAreas}</p>
                   </div>
                </div>
              </div>
@@ -1094,15 +1169,28 @@ function AIChatView({ user, language }: { user: any, language: Language }) {
     setLoading(true);
 
     try {
+      const history = messages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      }));
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, language })
+        body: JSON.stringify({ message: userMsg, language, history })
       });
+      
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'ai', text: data.text }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'ai', text: language === 'en' ? "Sorry, I'm having trouble connecting right now." : "معذرت، مجھے اس وقت رابطہ کرنے میں دشواری ہو رہی ہے۔" }]);
+      if (!res.ok) throw new Error(data.error || "Chat failed");
+      
+      if (data.text) {
+        setMessages(prev => [...prev, { role: 'ai', text: data.text }]);
+      } else {
+        throw new Error("No response from advisor");
+      }
+    } catch (e: any) {
+      console.error("Chat Error:", e);
+      setMessages(prev => [...prev, { role: 'ai', text: language === 'en' ? `Advisor Error: ${e.message}. Please try again.` : `ایڈوائزر کی خرابی: ${e.message}۔ براہ کرم دوبارہ کوشش کریں۔` }]);
     } finally {
       setLoading(false);
     }
@@ -1116,7 +1204,7 @@ function AIChatView({ user, language }: { user: any, language: Language }) {
               <MessageSquare size={20} />
             </div>
             <div>
-              <h3 className="font-bold text-sm tracking-tight italic">Expert AI Assistant</h3>
+              <h3 className="font-bold text-sm tracking-tight italic">AI Advisor</h3>
               <p className="text-[9px] text-emerald-400 font-black uppercase tracking-widest italic leading-none mt-0.5 animate-pulse">● Online & Ready</p>
             </div>
           </div>
@@ -1152,20 +1240,27 @@ function AIChatView({ user, language }: { user: any, language: Language }) {
           )}
        </div>
 
-       <form onSubmit={send} className="p-6 bg-white border-t border-natural-100 flex gap-4 relative z-10 shadow-[0_-10px_20_rgba(0,0,0,0.02)]">
-          <input 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={language === 'en' ? "Consult with AI about your farm..." : "اپنے فارم کے بارے میں اے آئی سے مشورہ کریں..."}
-            className="flex-1 px-8 py-4 bg-natural-50 text-natural-700 border border-natural-200 rounded-full focus:outline-none focus:ring-2 focus:ring-natural-600 transition-all text-sm font-medium italic shadow-inner"
-          />
-          <button 
-            type="submit"
-            disabled={!input.trim() || loading}
-            className="p-4 bg-natural-600 text-white rounded-full shadow-xl shadow-natural-600/20 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all hover:bg-natural-700"
-          >
-            <Zap className={`w-5 h-5 ${loading ? 'animate-pulse' : ''}`} />
-          </button>
+       <form onSubmit={send} className="p-6 bg-white border-t border-natural-100 flex flex-col gap-4 relative z-10 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+          <div className="flex gap-4">
+            <input 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={language === 'en' ? "Consult with AI about your farm..." : "اپنے فارم کے بارے میں اے آئی سے مشورہ کریں..."}
+              className="flex-1 px-8 py-4 bg-natural-50 text-natural-700 border border-natural-200 rounded-full focus:outline-none focus:ring-2 focus:ring-natural-600 transition-all text-sm font-medium italic shadow-inner"
+            />
+            <button 
+              type="submit"
+              disabled={!input.trim() || loading}
+              className="p-4 bg-natural-600 text-white rounded-full shadow-xl shadow-natural-600/20 active:scale-95 disabled:opacity-50 disabled:active:scale-100 transition-all hover:bg-natural-700"
+            >
+              <Zap className={`w-5 h-5 ${loading ? 'animate-pulse' : ''}`} />
+            </button>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-1 text-[9px] font-black uppercase italic tracking-widest text-natural-400 whitespace-nowrap scrollbar-hide px-4">
+             <button type="button" onClick={() => setInput('Wheat sowing advice for Punjab?')} className="hover:text-natural-600 transition-colors">{language === 'en' ? 'Punjab Wheat Advice' : 'پنجاب گندم مشورہ'}</button>
+             <button type="button" onClick={() => setInput('Organic pest control for citrus in Sargodha?')} className="hover:text-natural-600 transition-colors">{language === 'en' ? 'Sargodha Citrus' : 'سرگودھا مالٹا'}</button>
+             <button type="button" onClick={() => setInput('Current Kissan Card benefits?')} className="hover:text-natural-600 transition-colors">{language === 'en' ? 'Kissan Card Info' : 'کسان کارڈ معلومات'}</button>
+          </div>
        </form>
     </div>
   );
@@ -1217,19 +1312,263 @@ function AdminView({ user, language }: { user: FirebaseUser, language: Language 
   );
 }
 
+// --- Market Intelligence View ---
+function MarketIntelligenceView({ language }: { language: Language }) {
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<any>(null);
+  const [city, setCity] = useState("Lahore");
+  const [activeTab, setActiveTab] = useState<'mandi' | 'supplies' | 'analytics'>('mandi');
+  
+  const cities = ["Lahore", "Karachi", "Islamabad", "Faisalabad", "Multan", "Sialkot", "Bahawalpur", "Peshawar", "Quetta", "Hyderabad"];
+  const t = translations[language];
+
+  useEffect(() => {
+    fetchMarketData();
+  }, [city]);
+
+  const fetchMarketData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/market-intelligence?city=${city}&language=${language}`);
+      const intel = await res.json();
+      setData(intel);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <PriceTicker language={language} />
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-natural-200">
+        <div className="flex items-center gap-4">
+          <TrendingUp className="text-natural-600" />
+          <h2 className="text-xl font-bold text-natural-600">{t.marketIntelTitle}</h2>
+        </div>
+        <div className="flex gap-2 h-10">
+          <select 
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            className="px-4 py-1 bg-natural-50 border border-natural-200 rounded-xl text-sm font-bold text-natural-600 focus:outline-none focus:ring-2 focus:ring-natural-300"
+          >
+            {cities.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button 
+            onClick={fetchMarketData}
+            className="p-2.5 bg-natural-600 text-white rounded-xl hover:bg-natural-700 transition-all active:scale-95"
+          >
+            <Activity size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 p-1 bg-natural-100 rounded-2xl w-fit">
+        {[
+          { id: 'mandi', label: t.mandiRates, icon: TrendingUp },
+          { id: 'supplies', label: t.agriSupplies, icon: Sprout },
+          { id: 'analytics', label: "AI Analytics", icon: Activity }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`
+              flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+              ${activeTab === tab.id ? 'bg-white text-natural-600 shadow-sm' : 'text-natural-400 hover:text-natural-600'}
+            `}
+          >
+            <tab.icon size={14} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div 
+            key="loader"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {[1,2,3,4,5,6].map(i => (
+              <div key={i} className="h-64 bg-white border border-natural-100 rounded-3xl animate-pulse"></div>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.div 
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+          >
+            {activeTab === 'mandi' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {data?.mandiPrices?.map((price: any, i: number) => (
+                  <div key={i} className="bg-white p-6 rounded-[32px] border border-natural-200 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform">
+                      <TrendingUp size={80} className={price.trend === 'bullish' ? 'text-emerald-500' : 'text-red-500'} />
+                    </div>
+                    
+                    <div className="flex justify-between items-start mb-6">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-natural-400 mb-1">{t.mandiAlert}</p>
+                        <h3 className="text-2xl font-bold text-natural-600">{price.crop}</h3>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${price.trend === 'bullish' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                        {price.trend === 'bullish' ? 'Bullish' : 'Bearish'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-4 mb-6">
+                      <div className="flex justify-between items-end">
+                        <p className="text-xs font-medium text-natural-500">{t.currentRate}</p>
+                        <p className="text-3xl font-black text-natural-700 italic">Rs. {price.currentPrice.toLocaleString()}</p>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <p className="text-natural-400">{t.aiPredicted30d}</p>
+                        <p className="font-bold text-emerald-600">Rs. {price.prediction30d.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-natural-50 rounded-2xl border border-dashed border-natural-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Activity size={14} className="text-natural-400" />
+                        <p className="text-[10px] font-black uppercase tracking-widest text-natural-500">{t.recommendation}</p>
+                      </div>
+                      <p className="text-xs font-bold text-natural-600 italic">"{price.recommendation}"</p>
+                    </div>
+                    
+                    <div className="mt-4 flex justify-between items-center text-[10px] font-black text-natural-400 uppercase tracking-widest">
+                       <span>{t.demand}: {price.demandLevel}</span>
+                       <span>{price.unit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'supplies' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {data?.supplies?.map((item: any, i: number) => (
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-natural-200 hover:border-natural-400 transition-all">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-natural-400 mb-1">{item.brand}</p>
+                    <h4 className="font-bold text-natural-700 mb-4">{item.item}</h4>
+                    <div className="flex justify-between items-center">
+                       <p className="text-lg font-black text-natural-600 italic">Rs. {item.price.toLocaleString()}</p>
+                       <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">{item.availability}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'analytics' && (
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 <div className="lg:col-span-2 bg-white p-6 rounded-[32px] border border-natural-200 shadow-sm overflow-hidden min-h-[400px]">
+                    <h3 className="text-lg font-bold text-natural-600 mb-6">{t.aiForecast}</h3>
+                    <div className="h-[300px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={data?.mandiPrices?.[0]?.history || []}>
+                          <defs>
+                            <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#414141" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#414141" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                          <XAxis dataKey="date" fontSize={10} axisLine={false} tickLine={false} />
+                          <YAxis fontSize={10} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          />
+                          <Area type="monotone" dataKey="price" stroke="#414141" strokeWidth={3} fillOpacity={1} fill="url(#colorPrice)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                 </div>
+                 <div className="space-y-6">
+                    <div className="bg-natural-600 p-6 rounded-[32px] text-white overflow-hidden relative">
+                       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+                       <h4 className="font-bold mb-4 italic text-sm">{t.aiMarketInsights}</h4>
+                       <ul className="space-y-4">
+                          {data?.insights?.map((insight: string, i: number) => (
+                            <li key={i} className="flex gap-3 text-xs italic font-medium leading-relaxed opacity-90">
+                               <span className="text-natural-300 font-black tracking-tighter">0{i+1}.</span>
+                               {insight}
+                            </li>
+                          ))}
+                       </ul>
+                    </div>
+                    <div className="bg-emerald-600 p-6 rounded-[32px] text-white">
+                       <h4 className="font-black uppercase tracking-widest text-[10px] mb-2 opacity-80">{t.bestSellingWindow}</h4>
+                       <p className="text-xl font-bold italic mb-4">June 15 - June 30</p>
+                       <p className="text-xs font-medium opacity-90 leading-relaxed italic">
+                         {t.sellAdvice}
+                       </p>
+                    </div>
+                 </div>
+               </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function PriceTicker({ language }: { language: Language }) {
+  const [prices, setPrices] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/landscape-updates?language=${language}`)
+      .then(res => res.json())
+      .then(data => setPrices(data.marketPrices || []))
+      .catch(console.error);
+  }, [language]);
+
+  return (
+    <div className="w-full bg-natural-600 text-white py-2 overflow-hidden rounded-xl border border-natural-500 shadow-xl shadow-natural-600/10">
+      <div className="flex animate-marquee whitespace-nowrap">
+        {[...prices, ...prices].map((item, i) => (
+          <div key={i} className="flex items-center gap-4 px-8 border-r border-natural-500/50">
+            <span className="text-[10px] font-black uppercase tracking-widest text-natural-300">{item.crop}</span>
+            <span className="text-sm font-bold italic">{item.price}</span>
+            <span className={`text-[10px] font-bold ${item.trend === 'up' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {item.trend === 'up' ? '▲' : '▼'}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MarketPriceView({ language }: { language: Language }) {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCrop, setSelectedCrop] = useState<string | null>(null);
+  const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/landscape-updates')
+    fetch(`/api/landscape-updates?language=${language}`)
       .then(res => res.json())
       .then(d => {
-        setData(d.marketPrices || []);
+        const prices = d.marketPrices || [];
+        setData(prices);
+        if (prices.length > 0) {
+          setSelectedCrop(prices[0].crop);
+          setChartData(prices[0].history || []);
+        }
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [language]);
+
+  const handleCropSelect = (crop: any) => {
+    setSelectedCrop(crop.crop);
+    setChartData(crop.history || []);
+  };
 
   if (loading) return <div className="py-24 text-center animate-pulse"><TrendingUp size={48} className="mx-auto mb-4 text-natural-200" /></div>;
 
@@ -1238,22 +1577,90 @@ function MarketPriceView({ language }: { language: Language }) {
        <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm">
           <h2 className="text-2xl font-bold mb-8 text-natural-600 flex items-center gap-3">
              <TrendingUp className="text-natural-400" />
-             {language === 'en' ? "Market Trends & Mandi Prices" : "مارکیٹ کے رجحانات اور منڈی کی قیمتیں"}
+             {language === 'en' ? "Market Trends & Mandi Prices (Pakistan)" : "مارکیٹ کے رجحانات اور منڈی کی قیمتیں (پاکستان)"}
           </h2>
+
+          <div className="mb-12 bg-natural-50 p-6 rounded-3xl border border-natural-100">
+             <div className="flex justify-between items-center mb-6">
+                <div>
+                   <h3 className="text-lg font-bold text-natural-700">{selectedCrop} {language === 'en' ? "Price Trend" : "قیمت کا رجحان"}</h3>
+                   <p className="text-xs text-natural-400 italic">Rs. / 40kg (Maund)</p>
+                </div>
+                <div className="text-right">
+                   <p className="text-2xl font-black text-natural-600 italic">
+                      {data.find(c => c.crop === selectedCrop)?.price}
+                   </p>
+                </div>
+             </div>
+             
+             <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                   <AreaChart data={chartData}>
+                      <defs>
+                         <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#415a4d" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#415a4d" stopOpacity={0}/>
+                         </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="day" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 10, fontWeight: 700, fill: '#A3A3A3'}}
+                      />
+                      <YAxis 
+                        hide 
+                        domain={['auto', 'auto']}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          borderRadius: '16px', 
+                          border: 'none', 
+                          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="price" 
+                        stroke="#415a4d" 
+                        strokeWidth={4} 
+                        fillOpacity={1} 
+                        fill="url(#colorPrice)" 
+                        animationDuration={1500}
+                      />
+                   </AreaChart>
+                </ResponsiveContainer>
+             </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {data.map((item, i) => (
-                <div key={i} className="p-6 bg-natural-50 rounded-2xl border border-natural-100 flex justify-between items-center group hover:bg-white hover:shadow-xl transition-all">
+                <button 
+                  key={i} 
+                  onClick={() => handleCropSelect(item)}
+                  className={`p-6 rounded-2xl border transition-all text-left flex justify-between items-center group
+                    ${selectedCrop === item.crop 
+                      ? 'bg-natural-600 text-white border-natural-600 shadow-xl scale-[1.02]' 
+                      : 'bg-natural-50 text-natural-700 border-natural-100 hover:bg-white hover:shadow-lg'}`}
+                >
                    <div>
-                      <p className="text-[10px] font-black uppercase text-natural-400 mb-1 tracking-widest">{language === 'en' ? "Regional Market" : "علاقائی مارکیٹ"}</p>
-                      <h3 className="text-lg font-bold text-natural-700">{item.crop}</h3>
+                      <p className={`text-[10px] font-black uppercase mb-1 tracking-widest ${selectedCrop === item.crop ? 'text-natural-300' : 'text-natural-400'}`}>
+                        {language === 'en' ? "Regional Market" : "علاقائی مارکیٹ"}
+                      </p>
+                      <h3 className="text-lg font-bold">{item.crop}</h3>
                    </div>
                    <div className="text-right">
-                      <p className="text-xl font-black text-natural-600 italic">Rs. {item.pricePerKg}/kg</p>
-                      <span className={`text-[10px] font-black uppercase italic ${item.trend === 'up' ? 'text-emerald-500' : 'text-red-500'}`}>
-                         {item.trend === 'up' ? '↗ Bullish' : '↘ Bearish'}
+                      <p className={`text-xl font-black italic ${selectedCrop === item.crop ? 'text-white' : 'text-natural-600'}`}>
+                        {item.price}
+                      </p>
+                      <span className={`text-[10px] font-black uppercase italic ${selectedCrop === item.crop ? 'text-emerald-300' : (item.trend === 'up' ? 'text-emerald-500' : 'text-red-500')}`}>
+                         {item.trend === 'up' ? '↗ Bullish' : item.trend === 'down' ? '↘ Bearish' : '→ Stable'}
                       </span>
                    </div>
-                </div>
+                </button>
              ))}
           </div>
        </div>
@@ -1266,14 +1673,15 @@ function WeatherView({ language }: { language: Language }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/landscape-updates')
+    setLoading(true);
+    fetch(`/api/landscape-updates?language=${language}`)
       .then(res => res.json())
       .then(d => {
         setData(d.weather);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [language]);
 
   if (loading) return <div className="py-24 text-center animate-pulse"><CloudSun size={48} className="mx-auto mb-4 text-natural-200" /></div>;
 
@@ -1314,14 +1722,15 @@ function CalendarView({ language }: { language: Language }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/agri-calendar')
+    setLoading(true);
+    fetch(`/api/agri-calendar?language=${language}`)
       .then(res => res.json())
       .then(d => {
         setCalendar(d.calendar || []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [language]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -1358,8 +1767,44 @@ function CalendarView({ language }: { language: Language }) {
   );
 }
 
-function SchemesView() {
-  return <Placeholder icon={Info} title="Govt Schemes" desc="Personalized notifications for agriculture subsidies, loan programs, and insurance eligibility checks." />;
+function SchemesView({ language }: { language: Language }) {
+  const [schemes, setSchemes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/govt-schemes?language=${language}`)
+      .then(res => res.json())
+      .then(d => {
+        setSchemes(d.schemes || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [language]);
+
+  if (loading) return <div className="py-24 text-center animate-pulse"><Info size={48} className="mx-auto mb-4 text-natural-200" /></div>;
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+       <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm">
+          <h2 className="text-2xl font-bold mb-8 text-natural-600 flex items-center gap-3">
+             <Info className="text-natural-400" />
+             {language === 'en' ? "Pakistan Govt Agriculture Schemes" : "پاکستان حکومتی زراعتی اسکیمیں"}
+          </h2>
+          <div className="grid grid-cols-1 gap-6">
+             {schemes.map((scheme, i) => (
+                <div key={i} className="p-6 bg-natural-50 rounded-2xl border border-natural-100 group hover:bg-white hover:shadow-xl transition-all">
+                   <h3 className="text-lg font-bold text-natural-700 mb-2">{scheme.title}</h3>
+                   <p className="text-sm text-natural-500 mb-4 italic leading-relaxed">{scheme.description}</p>
+                   <div className="flex items-center gap-2">
+                     <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Eligibility</span>
+                     <p className="text-xs font-bold text-natural-600">{scheme.eligibility}</p>
+                   </div>
+                </div>
+             ))}
+          </div>
+       </div>
+    </div>
+  );
 }
 
 function Placeholder({ icon: Icon, title, desc }: any) {
