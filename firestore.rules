@@ -10,6 +10,10 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
+
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
     
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
@@ -25,13 +29,18 @@ service cloud.firestore {
 
     // --- Users Collection ---
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
       allow create: if isOwner(userId) 
         && incoming().uid == request.auth.uid
-        && incoming().createdAt == request.time;
-      allow update: if isOwner(userId)
+        && incoming().createdAt == request.time
+        && incoming().role == 'farmer'; // Users can't make themselves admins
+      allow update: if (isOwner(userId) || isAdmin())
         && incoming().uid == request.auth.uid
-        && incoming().diff(resource.data).affectedKeys().hasOnly(['displayName', 'language', 'phone', 'location', 'role']);
+        && (
+          isAdmin() || 
+          incoming().diff(resource.data).affectedKeys().hasOnly(['displayName', 'language', 'phone', 'location'])
+        );
     }
 
     // --- Farms Collection ---

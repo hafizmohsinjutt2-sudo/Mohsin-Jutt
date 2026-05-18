@@ -14,12 +14,17 @@ import {
   Search,
   Camera,
   ChevronRight,
+  ChevronLeft,
   Menu,
   X,
   Droplets,
   Zap,
   Info,
   Calendar,
+  Lock,
+  Download,
+  MapPin,
+  Users,
   LineChart as LineChartIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,8 +39,9 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { auth, loginWithGoogle, loginAnonymously } from './lib/firebase';
+import { auth, loginWithGoogle, loginAnonymously, db, syncUser, signupWithEmail, loginWithEmail, resetPassword } from './lib/firebase';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+import { collection, getDocs, doc, getDoc, setDoc, query, orderBy, limit, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 // --- Types ---
 type View = 'dashboard' | 'scanner' | 'weather' | 'market' | 'chat' | 'calendar' | 'schemes' | 'admin' | 'market-intel';
@@ -107,7 +113,8 @@ const translations = {
     currentRate: "Current Rate",
     aiPredicted30d: "30d AI Predicted",
     severity: "Severity",
-    aiConfidence: "AI Confidence"
+    aiConfidence: "AI Confidence",
+    back: "Back"
   },
   ur: {
     overview: "جائزہ",
@@ -174,14 +181,15 @@ const translations = {
     currentRate: "موجودہ ریٹ",
     aiPredicted30d: "30 دن کی پیش گوئی",
     severity: "شدت",
-    aiConfidence: "اے آئی اعتماد"
+    aiConfidence: "اے آئی اعتماد",
+    back: "واپس"
   }
 };
 
 // --- Components ---
-const Sidebar = ({ currentView, setView, isMobileOpen, setIsMobileOpen, language }: { 
+const Sidebar = ({ currentView, pushView, isMobileOpen, setIsMobileOpen, language }: { 
   currentView: View, 
-  setView: (v: View) => void,
+  pushView: (v: View) => void,
   isMobileOpen: boolean,
   setIsMobileOpen: (o: boolean) => void,
   language: Language
@@ -217,7 +225,7 @@ const Sidebar = ({ currentView, setView, isMobileOpen, setIsMobileOpen, language
             return (
               <button
                 key={item.id}
-                onClick={() => { setView(item.id as View); setIsMobileOpen(false); }}
+                onClick={() => { pushView(item.id as View); setIsMobileOpen(false); }}
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
                   ${isActive 
@@ -234,7 +242,7 @@ const Sidebar = ({ currentView, setView, isMobileOpen, setIsMobileOpen, language
 
           <div className="pt-4 mt-4 border-t border-natural-500/50">
              <button
-                onClick={() => { setView('admin'); setIsMobileOpen(false); }}
+                onClick={() => { pushView('admin'); setIsMobileOpen(false); }}
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all
                   ${currentView === 'admin'
@@ -267,6 +275,7 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('dashboard');
+  const [history, setHistory] = useState<View[]>(['dashboard']);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [language, setLanguage] = useState<Language>('en');
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -274,11 +283,52 @@ export default function App() {
 
   const t = translations[language];
 
+  const pushView = (newView: View) => {
+    if (newView === view) return;
+    setHistory(prev => [...prev, newView]);
+    setView(newView);
+  };
+
+  const popView = () => {
+    if (history.length <= 1) return;
+    const newHistory = [...history];
+    newHistory.pop();
+    const prevView = newHistory[newHistory.length - 1];
+    setHistory(newHistory);
+    setView(prevView);
+  };
+
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        setIsAdmin(true); 
+        try {
+          // Sync user profile to Firestore
+          await syncUser(u);
+
+          const userRef = doc(db, 'users', u.uid);
+          const userDoc = await getDoc(userRef);
+          
+          let role = 'farmer';
+          if (userDoc.exists()) {
+            role = userDoc.data().role;
+          }
+
+          // Bootstrap admin for the primary user
+          if (u.email === 'hafizmohsinjutt2@gmail.com' && role !== 'admin') {
+            await setDoc(userRef, { role: 'admin' }, { merge: true });
+            role = 'admin';
+          }
+
+          if (role === 'admin') {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+          }
+        } catch (err) {
+          console.error("Auth sync error:", err);
+          setIsAdmin(false);
+        }
       } else {
         setIsAdmin(false);
       }
@@ -304,7 +354,7 @@ export default function App() {
     <div className="min-h-screen bg-natural-50" dir={language === 'ur' ? 'rtl' : 'ltr'}>
       <Sidebar 
         currentView={view} 
-        setView={setView} 
+        pushView={pushView} 
         isMobileOpen={isSidebarOpen} 
         setIsMobileOpen={setIsSidebarOpen} 
         language={language}
@@ -314,12 +364,24 @@ export default function App() {
       <main className={`min-h-screen ${language === 'en' ? 'lg:ml-64' : 'lg:mr-64'}`}>
         {/* Header */}
         <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md border-b border-natural-200">
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-2 lg:hidden text-natural-600"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 lg:hidden text-natural-600"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+
+            {history.length > 1 && (
+              <button 
+                onClick={popView}
+                className="flex items-center gap-2 p-2 px-3 bg-natural-100 text-natural-600 rounded-xl hover:bg-natural-200 transition-all font-bold text-sm"
+              >
+                <ChevronRight className={`w-4 h-4 ${language === 'en' ? 'rotate-180' : ''}`} />
+                {t.back}
+              </button>
+            )}
+          </div>
 
           <div className="hidden sm:block">
             <p className="text-xs text-natural-400 font-medium lowercase italic">{t.greeting}, {user.displayName?.split(' ')[0]}</p>
@@ -421,7 +483,7 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {view === 'dashboard' && <Dashboard user={user} setView={setView} language={language} />}
+              {view === 'dashboard' && <Dashboard user={user} pushView={pushView} language={language} />}
               {view === 'scanner' && <DiseaseScanner language={language} />}
               {view === 'chat' && <AIChatView user={user} language={language} />}
               {view === 'market' && <MarketPriceView language={language} />}
@@ -444,6 +506,15 @@ function LandingPage({ setUser, setIsAdmin }: { setUser: (u: any) => void, setIs
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [language, setLanguage] = useState<Language>('en');
+  const [authMode, setAuthMode] = useState<'landing' | 'login' | 'signup' | 'reset'>('landing');
+  
+  // Form States
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [username, setUsername] = useState('');
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const t = {
     en: {
@@ -495,6 +566,54 @@ function LandingPage({ setUser, setIsAdmin }: { setUser: (u: any) => void, setIs
     }
   };
 
+  const handleEmailSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await signupWithEmail(email, password, name, phone, username);
+    } catch (err: any) {
+      setError(err.message || "Signup failed");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await loginWithEmail(email, password);
+    } catch (err: any) {
+      setError(err.message || "Login failed");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError("Please enter your email");
+      return;
+    }
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await resetPassword(email);
+      setSuccessMsg("Reset link sent! Check your inbox.");
+      setTimeout(() => {
+        setSuccessMsg(null);
+        setAuthMode('login');
+      }, 3000);
+    } catch (err: any) {
+      setError(err.message || "Reset failed");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   const handleDemoLogin = async () => {
     setIsLoggingIn(true);
     setError(null);
@@ -541,74 +660,230 @@ function LandingPage({ setUser, setIsAdmin }: { setUser: (u: any) => void, setIs
 
         <main className="grid lg:grid-cols-2 gap-12 items-center flex-1">
           <div className="text-center lg:text-left">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <span className="inline-block px-4 py-1.5 bg-natural-600 text-natural-50 text-xs font-black uppercase tracking-widest rounded-full mb-6 italic">
-                {language === 'en' ? 'Sustainable Tech for Soil & Soul' : 'مٹی اور روح کے لیے پائیدار ٹیکنالوجی'}
-              </span>
-              <h1 className="text-5xl lg:text-7xl font-bold text-natural-600 leading-tight mb-6 font-heading">
-                {language === 'en' ? (
-                  <>Revolutionize Your <span className="text-natural-400">Farm</span> with AI.</>
-                ) : (
-                  <>اے آئی کے ساتھ اپنے <span className="text-natural-400">فارم</span> میں انقلاب لائیں۔</>
-                )}
-              </h1>
-              <p className="text-natural-500 text-lg mb-10 max-w-lg mx-auto lg:mx-0 leading-relaxed font-medium italic opacity-80">
-                {t.desc}
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
-                <button 
-                  onClick={handleLogin}
-                  disabled={isLoggingIn}
-                  className={`
-                    px-8 py-4 bg-natural-600 text-white rounded-2xl font-bold hover:bg-natural-700 transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95
-                    ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''}
-                  `}
+            <AnimatePresence mode="wait">
+              {authMode === 'landing' ? (
+                <motion.div
+                  key="landing"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.3 }}
                 >
-                  {isLoggingIn ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                    >
-                      <Zap className="w-5 h-5 text-natural-300" />
-                    </motion.div>
-                  ) : (
-                    <img src="https://www.google.com/favicon.ico" className="w-5 h-5 bg-white rounded-full p-0.5" alt=""/>
-                  )}
-                  {isLoggingIn ? t.authenticating : t.google}
-                </button>
-                <button 
-                  onClick={handleDemoLogin}
-                  disabled={isLoggingIn}
-                  className={`
-                    px-8 py-4 bg-white text-natural-600 rounded-2xl font-bold hover:bg-natural-100 transition-all flex items-center justify-center gap-3 border border-natural-200 shadow-sm
-                    ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}
-                  `}
-                >
-                  {isLoggingIn ? (
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                    >
-                      <Activity className="w-5 h-5 text-natural-300" />
-                    </motion.div>
-                  ) : (
-                    <Activity className="w-5 h-5 text-natural-300" />
-                  )}
-                  {isLoggingIn ? t.loadingDemo : t.demo}
-                </button>
-              </div>
+                  <span className="inline-block px-4 py-1.5 bg-natural-600 text-natural-50 text-xs font-black uppercase tracking-widest rounded-full mb-6 italic">
+                    {language === 'en' ? 'Sustainable Tech for Soil & Soul' : 'مٹی اور روح کے لیے پائیدار ٹیکنالوجی'}
+                  </span>
+                  <h1 className="text-5xl lg:text-7xl font-bold text-natural-600 leading-tight mb-6 font-heading">
+                    {language === 'en' ? (
+                      <>Revolutionize Your <span className="text-natural-400">Farm</span> with AI.</>
+                    ) : (
+                      <>اے آئی کے ساتھ اپنے <span className="text-natural-400">فارم</span> میں انقلاب لائیں۔</>
+                    )}
+                  </h1>
+                  <p className="text-natural-500 text-lg mb-10 max-w-lg mx-auto lg:mx-0 leading-relaxed font-medium italic opacity-80">
+                    {t.desc}
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
+                    <div className="flex flex-col gap-3 w-full sm:w-auto">
+                      <button 
+                        onClick={handleLogin}
+                        disabled={isLoggingIn}
+                        className={`
+                          px-8 py-4 bg-natural-600 text-white rounded-2xl font-bold hover:bg-natural-700 transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95
+                          ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''}
+                        `}
+                      >
+                        {isLoggingIn ? (
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                          >
+                            <Zap className="w-5 h-5 text-natural-300" />
+                          </motion.div>
+                        ) : (
+                          <img src="https://www.google.com/favicon.ico" className="w-5 h-5 bg-white rounded-full p-0.5" alt=""/>
+                        )}
+                        {isLoggingIn ? t.authenticating : t.google}
+                      </button>
+                      <button 
+                        onClick={() => setAuthMode('login')}
+                        className="text-xs font-black uppercase tracking-widest text-natural-400 hover:text-natural-600 transition-all text-center"
+                      >
+                        {language === 'en' ? 'Or login with email' : 'یا ای میل سے لاگ ان کریں'}
+                      </button>
+                    </div>
 
-              {error && (
-                <p className="mt-4 text-sm text-red-500 font-bold italic animate-pulse">
-                   ⚠️ {error}
-                </p>
+                    <button 
+                      onClick={handleDemoLogin}
+                      disabled={isLoggingIn}
+                      className={`
+                        px-8 py-4 bg-white text-natural-600 rounded-2xl font-bold hover:bg-natural-100 transition-all flex items-center justify-center gap-3 border border-natural-200 shadow-sm
+                        ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}
+                      `}
+                    >
+                      {isLoggingIn ? (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                        >
+                          <Activity className="w-5 h-5 text-natural-300" />
+                        </motion.div>
+                      ) : (
+                        <Activity className="w-5 h-5 text-natural-300" />
+                      )}
+                      {isLoggingIn ? t.loadingDemo : t.demo}
+                    </button>
+                  </div>
+
+                  {error && (
+                    <p className="mt-4 text-sm text-red-500 font-bold italic animate-pulse">
+                       ⚠️ {error}
+                    </p>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="auth-form"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3 }}
+                  className="bg-white/60 backdrop-blur-xl p-8 rounded-[32px] border border-white shadow-2xl max-w-md mx-auto lg:mx-0"
+                >
+                  <div className="flex items-center gap-2 mb-6">
+                    <button 
+                      onClick={() => setAuthMode('landing')}
+                      className="p-2 hover:bg-natural-100 rounded-full transition-all text-natural-400"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                    <h2 className="text-2xl font-black text-natural-600 uppercase italic tracking-tight">
+                      {authMode === 'login' ? 'Login' : authMode === 'signup' ? 'Sign Up' : 'Reset Password'}
+                    </h2>
+                  </div>
+
+                  {successMsg && (
+                    <div className="p-4 bg-emerald-50 text-emerald-600 rounded-xl mb-4 text-xs font-bold border border-emerald-100 italic">
+                      ✓ {successMsg}
+                    </div>
+                  )}
+
+                  {error && (
+                    <div className="p-4 bg-red-50 text-red-600 rounded-xl mb-4 text-xs font-bold border border-red-100 italic">
+                      ⚠️ {error}
+                    </div>
+                  )}
+
+                  <form onSubmit={authMode === 'login' ? handleEmailLogin : authMode === 'signup' ? handleEmailSignup : handleResetPassword} className="space-y-4">
+                    {authMode === 'signup' && (
+                      <>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-natural-400 italic ml-1">Full Name</label>
+                          <div className="relative">
+                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-300" size={16} />
+                            <input 
+                              type="text" 
+                              required
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              placeholder="e.g. John Doe"
+                              className="w-full pl-12 pr-4 py-3 bg-natural-100/50 border border-natural-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-natural-600/20 text-sm font-medium"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-natural-400 italic ml-1">Username</label>
+                          <div className="relative">
+                            <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-300" size={16} />
+                            <input 
+                              type="text" 
+                              required
+                              value={username}
+                              onChange={(e) => setUsername(e.target.value)}
+                              placeholder="farmer_01"
+                              className="w-full pl-12 pr-4 py-3 bg-natural-100/50 border border-natural-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-natural-600/20 text-sm font-medium"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-natural-400 italic ml-1">Contact Number</label>
+                          <div className="relative">
+                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-300" size={16} />
+                            <input 
+                              type="tel" 
+                              required
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                              placeholder="+92 XXX XXXXXXX"
+                              className="w-full pl-12 pr-4 py-3 bg-natural-100/50 border border-natural-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-natural-600/20 text-sm font-medium"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-natural-400 italic ml-1">Email Address</label>
+                      <div className="relative">
+                        <Info className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-300" size={16} />
+                        <input 
+                          type="email" 
+                          required
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="farmer@example.com"
+                          className="w-full pl-12 pr-4 py-3 bg-natural-100/50 border border-natural-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-natural-600/20 text-sm font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    {authMode !== 'reset' && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center px-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-natural-400 italic">Password</label>
+                          {authMode === 'login' && (
+                            <button type="button" onClick={() => setAuthMode('reset')} className="text-[10px] font-black uppercase text-natural-400 hover:text-natural-600">Forgot?</button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-300" size={16} />
+                          <input 
+                            type="password" 
+                            required
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full pl-12 pr-4 py-3 bg-natural-100/50 border border-natural-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-natural-600/20 text-sm font-medium"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <button 
+                      type="submit"
+                      disabled={isLoggingIn}
+                      className="w-full py-4 bg-natural-600 text-white rounded-2xl font-bold hover:bg-natural-600 shadow-xl transition-all active:scale-[0.98] disabled:opacity-50 mt-4 flex items-center justify-center gap-2"
+                    >
+                      {isLoggingIn && <Activity className="animate-spin" size={16} />}
+                      {authMode === 'login' ? 'Sign In' : authMode === 'signup' ? 'Create Account' : 'Send Reset Link'}
+                    </button>
+
+                    <div className="text-center mt-6">
+                      <p className="text-xs text-natural-400 font-bold italic">
+                        {authMode === 'login' ? "Don't have an account?" : "Already have an account?"}
+                        <button 
+                          type="button"
+                          onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
+                          className="ml-2 text-natural-600 hover:underline"
+                        >
+                          {authMode === 'login' ? 'Sign Up' : 'Login'}
+                        </button>
+                      </p>
+                    </div>
+                  </form>
+                </motion.div>
               )}
-            </motion.div>
+            </AnimatePresence>
           </div>
 
           <div className={`hidden lg:block relative ${language === 'ur' ? 'lg:-translate-x-12' : 'lg:translate-x-12'}`}>
@@ -664,7 +939,7 @@ function LandingPage({ setUser, setIsAdmin }: { setUser: (u: any) => void, setIs
   );
 }
 
-function Dashboard({ user, setView, language }: { user: any, setView: (v: View) => void, language: Language }) {
+function Dashboard({ user, pushView, language }: { user: any, pushView: (v: View) => void, language: Language }) {
   const [landscapeData, setLandscapeData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -761,7 +1036,7 @@ function Dashboard({ user, setView, language }: { user: any, setView: (v: View) 
                 </div>
                 <div className="flex justify-between items-center mb-6 relative z-10">
                   <h3 className="font-bold text-natural-600">{t.cropVitality}</h3>
-                  <button onClick={() => setView('scanner')} className="text-xs font-black text-natural-500 hover:underline uppercase tracking-widest italic">{t.details} →</button>
+                  <button onClick={() => pushView('scanner')} className="text-xs font-black text-natural-500 hover:underline uppercase tracking-widest italic">{t.details} →</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
                    <div className="sm:col-span-2 relative bg-natural-100 rounded-xl h-40 overflow-hidden border border-natural-200 group">
@@ -845,13 +1120,13 @@ function Dashboard({ user, setView, language }: { user: any, setView: (v: View) 
                 </div>
                 <div className="flex gap-2">
                    <button 
-                    onClick={() => setView('chat')}
+                    onClick={() => pushView('chat')}
                     className="flex-1 py-2 bg-white text-natural-600 rounded-lg text-[10px] font-black uppercase tracking-widest italic shadow-lg active:scale-95 transition-all hover:bg-natural-100"
                    >
                      {t.talkToAi}
                    </button>
                    <button 
-                    onClick={() => setView('scanner')}
+                    onClick={() => pushView('scanner')}
                     className="py-2 px-3 bg-natural-500/50 border border-white/10 text-white rounded-lg text-[10px] font-bold italic hover:bg-natural-500 transition-all"
                    >
                      {t.scanPhoto}
@@ -893,7 +1168,7 @@ function Dashboard({ user, setView, language }: { user: any, setView: (v: View) 
                  ].map((op, i) => (
                    <button 
                     key={i} 
-                    onClick={() => op.view !== 'dashboard' && setView(op.view as any)}
+                    onClick={() => op.view !== 'dashboard' && pushView(op.view as any)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-natural-200 transition-all font-bold text-xs uppercase tracking-tight text-natural-700 italic group active:scale-95`}
                    >
                       <span className={`p-2 rounded-lg ${op.color} group-hover:scale-110 transition-transform`}>{op.emoji}</span>
@@ -1267,47 +1542,232 @@ function AIChatView({ user, language }: { user: any, language: Language }) {
 }
 
 function AdminView({ user, language }: { user: FirebaseUser, language: Language }) {
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [adminPass, setAdminPass] = useState("");
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [token, setToken] = useState("");
+
   const t = translations[language];
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-       <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm relative overflow-hidden">
-          <div className="flex justify-between items-center mb-12 relative z-10">
-             <div>
-                <h2 className="text-2xl font-bold text-natural-600 font-heading tracking-tight underline decoration-natural-300 decoration-4 underline-offset-8">{t.adminPanel}</h2>
-                <p className="text-sm text-natural-400 mt-4 italic">{language === 'en' ? 'Operator' : 'آپریٹر'}: {user.email}</p>
-             </div>
-             <button 
-              onClick={() => signOut(auth)}
-              className="px-6 py-2 bg-natural-100 text-natural-600 border border-natural-200 rounded-xl text-[10px] font-black uppercase tracking-widest italic hover:bg-natural-600 hover:text-white transition-all font-sans"
-             >
-               {t.signOut}
-             </button>
+
+  useEffect(() => {
+    if (!isAdminAuthenticated) return;
+
+    setLoading(true);
+    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const fetchedUsers = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        joined: doc.data().createdAt?.toDate?.()?.toLocaleDateString() || 'Pending...',
+        name: doc.data().displayName || 'N/A',
+        phone: doc.data().phone || 'N/A',
+        city: doc.data().location?.city || 'Rural',
+        status: doc.data().role === 'admin' ? 'Admin' : 'Active'
+      }));
+      setUsers(fetchedUsers);
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore sync error:", err);
+      setError("Sync failed. Check permissions.");
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [isAdminAuthenticated]);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminPass })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToken(data.token);
+        setIsAdminAuthenticated(true);
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError("Connection failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isAdminAuthenticated) {
+    return (
+      <div className="max-w-md mx-auto mt-20">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-3xl p-8 border border-natural-200 shadow-2xl"
+        >
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-natural-600 rounded-2xl flex items-center justify-center mx-auto mb-4 rotate-3 shadow-lg shadow-natural-600/20">
+              <Lock className="text-white" size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-natural-700 italic">Restricted Access</h2>
+            <p className="text-sm text-natural-400 mt-2 italic">Enter Administrator Passkey to proceed</p>
           </div>
 
-          <div className="flex flex-col items-center justify-center py-20 text-center relative z-10">
-             <div className="p-6 bg-natural-50 rounded-full border border-natural-100 mb-6">
-                <Settings size={48} className="text-natural-300 animate-spin-slow" />
-             </div>
-             <h3 className="text-xl font-bold text-natural-600 mb-2">Systems Ready</h3>
-             <p className="text-sm text-natural-400 max-w-sm mx-auto italic font-medium">
-               The administrative environment has been initialized and cleared of all test data. Real-time metrics will populate as nodes connect.
-             </p>
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <input 
+                type="password"
+                value={adminPass}
+                onChange={(e) => setAdminPass(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-6 py-4 bg-natural-50 border border-natural-200 rounded-2xl focus:ring-2 focus:ring-natural-600 outline-none font-mono text-center tracking-[0.5em]"
+                required
+              />
+            </div>
+            {error && <p className="text-red-500 text-xs font-bold text-center italic">{error}</p>}
+            <button 
+              disabled={loading}
+              className="w-full py-4 bg-natural-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-natural-700 transition-all shadow-xl shadow-natural-600/10 active:scale-95 disabled:opacity-50"
+            >
+              {loading ? "Verifying..." : "Unlock Dashboard"}
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8 pb-20">
+      {/* Admin Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[40px] border border-natural-200 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-natural-50 rounded-full translate-x-1/2 -translate-y-1/2 opacity-50"></div>
+        <div className="relative z-10">
+          <div className="flex items-center gap-4 mb-2">
+            <span className="p-2 bg-emerald-100 text-emerald-600 rounded-xl"><Activity size={20} /></span>
+            <h2 className="text-3xl font-bold text-natural-700 italic tracking-tight">{t.adminPanel}</h2>
           </div>
-          
-          <div className="mt-8 p-6 bg-natural-50 rounded-2xl border border-natural-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-             <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-                   <span className="text-[10px] font-black uppercase tracking-widest italic text-emerald-600">Auth Verified</span>
-                </div>
-                <div className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-blue-400"></div>
-                   <span className="text-[10px] font-black uppercase tracking-widest italic text-blue-600">Storage Ready</span>
-                </div>
-             </div>
-             <p className="text-[10px] font-black text-natural-300 uppercase tracking-widest italic">v0.1.0-alpha</p>
+          <p className="text-sm text-natural-400 italic">Secure Session Active • {user.email}</p>
+        </div>
+        <div className="flex gap-4 relative z-10">
+           <button 
+            onClick={() => { setIsAdminAuthenticated(false); setToken(""); }}
+            className="px-6 py-3 bg-natural-100 text-natural-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-natural-600 hover:text-white transition-all shadow-sm"
+           >
+             Lock
+           </button>
+           <button 
+            onClick={() => signOut(auth)}
+            className="px-6 py-3 bg-red-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+           >
+             {t.signOut}
+           </button>
+        </div>
+      </div>
+
+      {/* Stats Board */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {[
+          { label: "Total Farmers", value: users.length, trend: "+12%", icon: Users },
+          { label: "Scan Count", value: "1,284", trend: "+24%", icon: Camera },
+          { label: "AI Queries", value: "8,942", trend: "+18%", icon: MessageSquare },
+          { label: "Active Mandis", value: "48", trend: "Stable", icon: MapPin },
+        ].map((stat, i) => (
+          <div key={i} className="bg-white p-6 rounded-[32px] border border-natural-200 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
+            <div className="absolute -right-4 -top-4 text-natural-50 opacity-50 group-hover:scale-125 transition-transform">
+              <stat.icon size={80} />
+            </div>
+            <div className="relative z-10">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-natural-400 mb-2">{stat.label}</p>
+              <div className="flex items-end gap-3">
+                <span className="text-3xl font-black text-natural-700 italic">{stat.value}</span>
+                <span className="text-[10px] font-bold text-emerald-600 mb-1">{stat.trend}</span>
+              </div>
+            </div>
           </div>
-       </div>
+        ))}
+      </div>
+
+      {/* Professional User Table */}
+      <div className="bg-white rounded-[40px] border border-natural-200 shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-natural-100 flex justify-between items-center bg-natural-50/50">
+          <h3 className="text-lg font-bold text-natural-600 italic">Farmer Network Database</h3>
+          <div className="flex gap-2">
+            <button className="p-2 border border-natural-200 rounded-xl hover:bg-white text-natural-400"><Download size={18} /></button>
+            <button className="p-2 border border-natural-200 rounded-xl hover:bg-white text-natural-400"><Settings size={18} /></button>
+          </div>
+        </div>
+        
+        <div className="overflow-x-auto scrollbar-hide">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-natural-50">
+                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-natural-400 italic">Farmer / Username</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-natural-400 italic">Contact / Email</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-natural-400 italic">Password / Auth</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-natural-400 italic">Auth UID</th>
+                <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-natural-400 italic">Status</th>
+                <th className="px-8 py-5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((farmer) => (
+                <tr key={farmer.id} className="group hover:bg-natural-50 transition-all border-b border-natural-50 last:border-0">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-natural-200 flex items-center justify-center font-bold text-natural-600 text-sm">{farmer.name[0]}</div>
+                      <div>
+                        <p className="font-bold text-natural-700">{farmer.name}</p>
+                        <p className="text-[10px] text-natural-400 italic">@{farmer.username || 'n/a'}</p>
+                        <p className="text-[9px] text-natural-300 italic">Joined: {farmer.joined}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <p className="text-xs font-bold text-natural-600">{farmer.phone || 'No phone'}</p>
+                    <p className="text-[10px] text-natural-500 font-medium italic">{farmer.email}</p>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] bg-natural-100 text-natural-400 px-2 py-0.5 rounded-full w-fit mb-1 border border-natural-200">Encypted (SHA-256)</span>
+                      <p className="text-xs font-mono text-natural-300">••••••••••••</p>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <p className="text-[9px] font-mono text-natural-400 break-all max-w-[120px]">{farmer.uid || farmer.id}</p>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${farmer.status === 'Admin' ? 'bg-natural-600 text-white' : farmer.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                      {farmer.status}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <button className="p-2 hover:bg-natural-100 rounded-lg text-natural-300 hover:text-natural-600 transition-all"><Settings size={16} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        
+        {loading && (
+          <div className="p-20 text-center text-natural-300 animate-pulse">
+            <Activity className="mx-auto mb-4" />
+            <p className="text-xs font-black uppercase tracking-[0.2em]">Synchronizing Nodes...</p>
+          </div>
+        )}
+        
+        {users.length === 0 && !loading && (
+          <div className="p-20 text-center text-natural-300 italic">
+            <p className="text-xs">No records found in cloud sync.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

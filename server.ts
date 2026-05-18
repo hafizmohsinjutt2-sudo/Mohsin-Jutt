@@ -359,6 +359,20 @@ app.get("/api/market-intelligence", async (req, res) => {
   }
 });
 
+// ADMIN SYSTEM
+app.post("/api/admin/login", (req, res) => {
+  const { password } = req.body;
+  const adminPass = process.env.ADMIN_PASSKEY || "AgroAdmin2024";
+  
+  if (password === adminPass) {
+    console.log("Admin Login Success at", new Date().toISOString());
+    res.json({ success: true, token: "admin_session_active_" + Date.now() });
+  } else {
+    console.warn("Failed Admin Login Attempt at", new Date().toISOString());
+    res.status(401).json({ success: false, message: "Invalid Admin Passkey" });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
