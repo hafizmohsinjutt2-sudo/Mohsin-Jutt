@@ -5,19 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Google AI Studio App</title>
     <script>
-      // Safeguard against libraries trying to overwrite window.fetch
       (function() {
-        var originalFetch = window.fetch;
-        if (originalFetch) {
-          try {
-            Object.defineProperty(window, 'fetch', {
-              value: originalFetch,
-              writable: false,
-              configurable: true
-            });
-          } catch (e) {
-            // If we can't redefine it, it might already be protected
-          }
+        var _fetch = window.fetch;
+        try {
+          Object.defineProperty(window, "fetch", {
+            get: function() { return _fetch; },
+            set: function(v) { console.warn("Blocked attempt to overwrite fetch"); },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          // If we can't redefine it, we hope it's already protected
         }
       })();
     </script>

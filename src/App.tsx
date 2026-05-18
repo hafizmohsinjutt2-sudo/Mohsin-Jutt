@@ -225,8 +225,24 @@ export default function App() {
 // --- Sub-views ---
 
 function LandingPage() {
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      setError(err.message || "Failed to sign in. Please try again.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-natural-50 text-natural-700 overflow-hidden relative">
+    <div className="min-h-screen bg-natural-50 text-natural-700 overflow-hidden relative font-sans">
       <div className="absolute top-0 right-0 w-1/2 h-full bg-natural-300/10 blur-[100px] rounded-full -translate-y-1/2 translate-x-1/2"></div>
       <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-natural-500/10 blur-[100px] rounded-full translate-y-1/2 -translate-x-1/4"></div>
 
@@ -257,19 +273,38 @@ function LandingPage() {
                 Empower your crops with real-time AI disease detection, hyperlocal weather forecasts, and predictive market analytics.
               </p>
               
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start items-center">
                 <button 
-                  onClick={loginWithGoogle}
-                  className="px-8 py-4 bg-natural-600 text-white rounded-2xl font-bold hover:bg-natural-700 transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95"
+                  onClick={handleLogin}
+                  disabled={isLoggingIn}
+                  className={`
+                    px-8 py-4 bg-natural-600 text-white rounded-2xl font-bold hover:bg-natural-700 transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95
+                    ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''}
+                  `}
                 >
-                  <img src="https://www.google.com/favicon.ico" className="w-5 h-5 bg-white rounded-full p-0.5" alt=""/>
-                  Continue with Google
+                  {isLoggingIn ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+                    >
+                      <Zap className="w-5 h-5 text-natural-300" />
+                    </motion.div>
+                  ) : (
+                    <img src="https://www.google.com/favicon.ico" className="w-5 h-5 bg-white rounded-full p-0.5" alt=""/>
+                  )}
+                  {isLoggingIn ? 'Authenticating...' : 'Continue with Google'}
                 </button>
                 <button className="px-8 py-4 bg-white text-natural-600 rounded-2xl font-bold hover:bg-natural-100 transition-all flex items-center justify-center gap-3 border border-natural-200">
                   <Activity className="w-5 h-5 text-natural-300" />
                   Explore Demo
                 </button>
               </div>
+
+              {error && (
+                <p className="mt-4 text-sm text-red-500 font-bold italic animate-pulse">
+                   ⚠️ {error}
+                </p>
+              )}
             </motion.div>
           </div>
 
@@ -328,61 +363,47 @@ function LandingPage() {
 
 function Dashboard({ user, setView }: { user: any, setView: (v: View) => void }) {
   const [landscapeData, setLandscapeData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/landscape-updates')
       .then(res => res.json())
-      .then(setLandscapeData)
-      .catch(console.error);
+      .then(data => {
+        setLandscapeData(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
   }, []);
+
+  const stats = [
+    { label: 'Crop Health', value: 'Monitoring...', icon: Activity, detail: 'AI Active', color: 'text-natural-600' },
+    { label: 'Soil Moisture', value: 'Awaiting Scan', icon: Droplets, detail: 'Sensor Link', color: 'text-blue-600' },
+    { label: 'Risk Alert', value: 'Zero Risk', icon: Zap, detail: 'Clean Scan', color: 'text-amber-600' },
+    { label: 'Yield Est.', value: 'Calculating...', icon: TrendingUp, detail: 'Data Link', color: 'text-natural-600' },
+  ];
 
   return (
     <div className="space-y-6">
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-natural-200 card-hover shadow-sm">
-          <div className="flex justify-between items-start mb-4">
-             <div className="p-2.5 bg-natural-100 rounded-xl text-natural-600">
-               <Activity size={24} />
-             </div>
-             <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded italic uppercase tracking-tighter">Healthy</span>
-          </div>
-          <p className="text-natural-400 text-xs font-black uppercase tracking-wider">Crop Health</p>
-          <p className="text-2xl font-bold mt-1 text-natural-600">92% Index</p>
-        </div>
-        
-        <div className="bg-white p-5 rounded-2xl border border-natural-200 card-hover shadow-sm">
-          <div className="flex justify-between items-start mb-4">
-             <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600">
-               <Droplets size={24} />
-             </div>
-             <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-1 rounded italic uppercase tracking-tighter">64% Soil</span>
-          </div>
-          <p className="text-natural-400 text-xs font-black uppercase tracking-wider">Next Irrigation</p>
-          <p className="text-2xl font-bold mt-1 text-natural-600 font-heading">6 AM Tomorrow</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-natural-200 card-hover shadow-sm">
-          <div className="flex justify-between items-start mb-4">
-             <div className="p-2.5 bg-amber-50 rounded-xl text-amber-600">
-               <Zap size={24} />
-             </div>
-             <span className="text-xs font-black text-amber-600 bg-amber-50 px-2 py-1 rounded italic uppercase tracking-tighter">Warning</span>
-          </div>
-          <p className="text-natural-400 text-xs font-black uppercase tracking-wider">Pest Risk Alert</p>
-          <p className="text-2xl font-bold mt-1 text-amber-600 font-heading">Moderate Risk</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-natural-200 card-hover shadow-sm">
-          <div className="flex justify-between items-start mb-4">
-             <div className="p-2.5 bg-natural-500/10 rounded-xl text-natural-600">
-               <TrendingUp size={24} />
-             </div>
-             <span className="text-xs font-black text-natural-500 bg-natural-100 px-2 py-1 rounded italic uppercase tracking-tighter">Live</span>
-          </div>
-          <p className="text-natural-400 text-xs font-black uppercase tracking-wider">Yield Forecast</p>
-          <p className="text-2xl font-bold mt-1 text-natural-600">4.2 Tons/Hec</p>
-        </div>
+        {stats.map((stat, i) => {
+          const Icon = stat.icon;
+          return (
+            <div key={i} className="bg-white p-5 rounded-2xl border border-natural-200 shadow-sm transition-all hover:border-natural-300">
+              <div className="flex justify-between items-start mb-4">
+                 <div className={`p-2.5 rounded-xl ${stat.color.replace('text', 'bg')}/10 ${stat.color}`}>
+                   <Icon size={24} />
+                 </div>
+                 <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded italic uppercase tracking-tighter">Live</span>
+              </div>
+              <p className="text-natural-400 text-[10px] font-black uppercase tracking-wider">{stat.label}</p>
+              <p className={`text-xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -861,51 +882,41 @@ function AdminView({ user }: { user: FirebaseUser }) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
        <div className="bg-white rounded-3xl p-8 border border-natural-200 shadow-sm relative overflow-hidden">
-          <div className="flex justify-between items-center mb-8 relative z-10">
+          <div className="flex justify-between items-center mb-12 relative z-10">
              <div>
-                <h2 className="text-2xl font-bold text-natural-600 font-heading">System Administration</h2>
-                <p className="text-sm text-natural-400 italic">Secure access for: {user.email}</p>
+                <h2 className="text-2xl font-bold text-natural-600 font-heading tracking-tight underline decoration-natural-300 decoration-4 underline-offset-8">Admin Panel</h2>
+                <p className="text-sm text-natural-400 mt-4 italic">Operator: {user.email}</p>
              </div>
              <button 
               onClick={() => signOut(auth)}
-              className="px-6 py-2 bg-red-50 text-red-600 border border-red-100 rounded-xl text-xs font-black uppercase tracking-widest italic hover:bg-red-100 transition-all font-sans"
+              className="px-6 py-2 bg-natural-100 text-natural-600 border border-natural-200 rounded-xl text-[10px] font-black uppercase tracking-widest italic hover:bg-natural-600 hover:text-white transition-all font-sans"
              >
                Sign Out
              </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-             <div className="p-6 bg-natural-50 rounded-2xl border border-natural-200">
-                <h3 className="font-bold text-natural-600 mb-4 flex items-center gap-2">
-                  <Activity size={18} />
-                  User Session
-                </h3>
-                <div className="space-y-3">
-                   <div className="flex justify-between items-center p-3 bg-white rounded-lg border border-natural-100 italic">
-                      <span className="text-xs font-bold">{user.displayName || user.email}</span>
-                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-tighter">Current User</span>
-                   </div>
-                </div>
+          <div className="flex flex-col items-center justify-center py-20 text-center relative z-10">
+             <div className="p-6 bg-natural-50 rounded-full border border-natural-100 mb-6">
+                <Settings size={48} className="text-natural-300 animate-spin-slow" />
              </div>
-
-             <div className="p-6 bg-natural-50 rounded-2xl border border-natural-200">
-                <h3 className="font-bold text-natural-600 mb-4 flex items-center gap-2">
-                  <TrendingUp size={18} />
-                  System Stats
-                </h3>
-                <p className="text-xs text-natural-500 mb-4 font-medium italic">Operational status of core clusters.</p>
-                <div className="flex items-center gap-2 text-emerald-600">
-                   <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-                   <span className="text-[10px] font-black uppercase tracking-widest italic">All Systems Nominal</span>
-                </div>
-             </div>
+             <h3 className="text-xl font-bold text-natural-600 mb-2">Systems Ready</h3>
+             <p className="text-sm text-natural-400 max-w-sm mx-auto italic font-medium">
+               The administrative environment has been initialized and cleared of all test data. Real-time metrics will populate as nodes connect.
+             </p>
           </div>
           
-          <div className="mt-8 p-6 bg-natural-600 text-white rounded-2xl border border-natural-500 flex flex-col sm:flex-row justify-between items-center gap-4">
-             <div>
-                <p className="text-xs font-black uppercase tracking-widest italic opacity-70">Security Protocol</p>
-                <p className="text-sm font-medium italic">Verified Authenticated Session.</p>
+          <div className="mt-8 p-6 bg-natural-50 rounded-2xl border border-natural-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+             <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest italic text-emerald-600">Auth Verified</span>
+                </div>
+                <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest italic text-blue-600">Storage Ready</span>
+                </div>
              </div>
+             <p className="text-[10px] font-black text-natural-300 uppercase tracking-widest italic">v0.1.0-alpha</p>
           </div>
        </div>
     </div>
